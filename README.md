@@ -45,6 +45,8 @@ python src/main.py
 6. Update documentation immediately after making changes
 7. Follow the workflow in `docs/HOW_TO_DEV.md`
 
+**Initial Setup**: If user has filled in "FILL IN HERE" sections in PROJECT_GOAL.md and PLAN.md, merge their content with the example structure when asked to "optimize" or "merge"
+
 ## Usage
 
 <!-- EXAMPLE - REPLACE WITH YOUR PROJECT'S USAGE -->

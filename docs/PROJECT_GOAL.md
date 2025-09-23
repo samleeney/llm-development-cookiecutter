@@ -13,7 +13,21 @@ Update this document when project scope changes, but keep it focused and concise
 
 ---
 
-<!-- EXAMPLE CONTENT - REPLACE EVERYTHING BELOW WITH YOUR PROJECT SPECIFICS -->
+<!-- USER CONTENT - FILL IN HERE -->
+## FILL IN HERE
+
+[Write your project description here. Include:
+- What you want to build
+- What problem it solves
+- Who will use it
+- Key features you want
+- Any technical requirements or preferences
+- Success criteria
+- Timeline if you have one]
+
+---
+
+<!-- EXAMPLE CONTENT - LLM WILL MERGE YOUR CONTENT WITH THIS STRUCTURE -->
 
 ## Overview
 **Project**: DataViz Dashboard

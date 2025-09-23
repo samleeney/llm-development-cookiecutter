@@ -20,7 +20,24 @@ Update statuses as you work. Move completed items to the Completed section with 
 
 ---
 
-<!-- EXAMPLE CONTENT - REPLACE EVERYTHING BELOW WITH YOUR PROJECT SPECIFICS -->
+<!-- USER CONTENT - FILL IN HERE -->
+## FILL IN HERE
+
+[List the features you want to build. For each feature, include:
+- Feature name
+- Description of what it does
+- Why it's needed
+- Any specific requirements or notes
+- Dependencies on other features (if any)]
+
+Example format:
+- Feature 1: [name and description]
+- Feature 2: [name and description]
+- Feature 3: [name and description]
+
+---
+
+<!-- EXAMPLE CONTENT - LLM WILL MERGE YOUR CONTENT WITH THIS STRUCTURE -->
 
 ## Features
 
