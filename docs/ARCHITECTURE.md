@@ -15,10 +15,18 @@ Keep this document in sync with your actual implementation. It serves as the tec
 
 <!-- EXAMPLE CONTENT - REPLACE EVERYTHING BELOW WITH YOUR PROJECT SPECIFICS -->
 
-## Project Structure ``` project_root/ ├── src/           # Source code ├──
-tests/         # Test files ├── data/          # Data files ├── docs/
-# Documentation ├── notebooks/     # Jupyter notebooks ├── scripts/
-# Utility scripts └── results/       # Output files ```
+## Project Structure
+```
+project_root/
+├── src/           # Source code
+├── tests/         # Test files
+├── data/          # Data files
+├── docs/          # Documentation
+├── logs/          # Log files (all logs saved here)
+├── notebooks/     # Jupyter notebooks
+├── scripts/       # Utility scripts
+└── results/       # Output files (format: YYYY-MM-DD_HH-MM-SS_description.ext)
+```
 
 ## Core Modules
 

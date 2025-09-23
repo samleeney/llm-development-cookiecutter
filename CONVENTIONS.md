@@ -31,6 +31,8 @@ project_root/
 ├── tests/         # Test files (mirrors src/)
 ├── data/          # Data files (not in git)
 ├── docs/          # Documentation
+├── logs/          # All log files (use format: YYYY-MM-DD_module.log)
+├── results/       # All outputs (use format: YYYY-MM-DD_HH-MM-SS_description.ext)
 ├── scripts/       # Utility scripts
 └── configs/       # Configuration files
 ```
@@ -63,11 +65,13 @@ project_root/
 - **Cyclomatic complexity**: Maximum 10
 - **No hardcoded values**: Use config files or environment variables
 - **Error handling**: Always handle expected errors explicitly
-- **Logging**: Use structured logging (not print statements)
+- **Logging**: Use structured logging (not print statements), save to `logs/` folder
 
 ## Documentation
 - **README**: Keep updated with setup and usage
 - **Inline comments**: Only for complex logic
+- **Logs**: All logs must be saved to `logs/` folder with format: `YYYY-MM-DD_module_name.log`
+- **Results**: All outputs must be saved to `results/` folder with format: `YYYY-MM-DD_HH-MM-SS_description.ext`
 - **Docstrings example**:
 ```python
 def calculate_discount(price: float, discount_percent: float) -> float:

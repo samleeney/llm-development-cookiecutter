@@ -200,11 +200,16 @@ models/
 *.safetensors
 
 # Results and outputs
-results/
+results/*
+!results/.gitkeep
+!results/README.md
 outputs/
-logs/
-*.log
 checkpoints/
+
+# Logs
+logs/*
+!logs/.gitkeep
+!logs/README.md
 
 # Temporary files
 *.tmp
