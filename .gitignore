@@ -246,3 +246,6 @@ prompts_cache/
 
 # Custom project-specific
 # Add your own patterns here
+calibration_pipeline_example/
+observation_overview.png
+*.hdf5

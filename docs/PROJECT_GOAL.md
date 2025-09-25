@@ -13,56 +13,75 @@ Update this document when project scope changes, but keep it focused and concise
 
 ---
 
-<!-- USER CONTENT - FILL IN HERE -->
-## FILL IN HERE
-
-[Write your project description here. Include:
-- What you want to build
-- What problem it solves
-- Who will use it
-- Key features you want
-- Any technical requirements or preferences
-- Success criteria
-- Timeline if you have one]
-
----
-
-<!-- EXAMPLE CONTENT - LLM WILL MERGE YOUR CONTENT WITH THIS STRUCTURE -->
-
 ## Overview
-**Project**: DataViz Dashboard
-**Purpose**: Interactive web dashboard for real-time data visualization
+**Project**: JAX Radiometer Calibration Pipeline (jaxcal)
+**Purpose**: GPU-accelerated radiometer calibration pipeline for 21cm cosmology using JAX
 
 ## Problem
-Analysts spend hours manually creating reports from CSV files, with no ability to explore data interactively or share insights easily.
+Current radiometer calibration pipelines for 21cm cosmology experiments are CPU-bound and process data sequentially, limiting throughput for large datasets. The existing pipeline uses multiple file formats (text files, .s1p files) and lacks unified data handling, making it difficult to leverage modern GPU acceleration.
 
 ## Solution
-A web-based dashboard that auto-imports CSV files, provides interactive charts, and allows one-click sharing of filtered views.
+A JAX-based calibration pipeline that provides:
+- Unified HDF5 data format for all measurements (PSD, VNA, temperature)
+- Fully parallelised operations across frequency channels using JAX
+- JIT-compiled calibration algorithms for optimal performance
+- Clean, modular architecture built from scratch
+- GPU-compatible data structures throughout
 
 ## Users
-- Primary: Business analysts in small to medium companies
-- Secondary: Data scientists needing quick exploratory tools
+- Primary: Radio astronomers working on global 21cm cosmology experiments
+- Secondary: Instrument scientists calibrating radiometer systems
 
 ## Key Features
-1. Drag-and-drop CSV import with automatic type detection
-2. Interactive charts with zoom, filter, and drill-down
-3. Shareable dashboard links with preserved filters
-4. Export to PDF/PNG for presentations
+1. **Data Loading** - HDF5-based data loader with standardised structure, JAX array conversion, and GPU compatibility
+2. **Least Squares Calibration** - Vectorised least squares method for noise wave parameter extraction
+3. **Analysis Tools** - Comprehensive plotting functions for input data, noise wave parameters, and predicted temperatures
+4. **Performance** - Full parallelisation across frequency channels with JIT compilation
+
+## Technical Requirements
+
+### Inputs
+- PSD measurements (source, load, noise spectra)
+- VNA measurements (S11 parameters)
+- Temperature measurements
+- Frequency channel information
+- All data provided via unified HDF5 format
+
+### Outputs
+- Noise wave parameters (5 parameters: u, c, s, NS, L)
+- Calibrated antenna temperatures
+- Diagnostic plots and visualisations
 
 ## Success Criteria
-- [ ] Process 100MB CSV files in under 5 seconds
-- [ ] Support 10+ simultaneous users
-- [ ] 90% of users can create first chart within 2 minutes
-- [ ] Zero data loss during 30-day testing period
+- [ ] Process full frequency range (50-200 MHz) in under 10 seconds
+- [ ] Achieve numerical agreement with existing pipeline (< 0.1% difference)
+- [ ] Support batch processing of multiple calibration datasets
+- [ ] Run on both CPU and GPU with automatic device selection
+- [ ] Produce publication-quality diagnostic plots
 
 ## Technical Stack
-- Language: Python 3.11
-- Framework: FastAPI + React
-- Key libraries: Pandas, Plotly, PostgreSQL
-- Deployment: Docker on AWS EC2
+- Language: Python 3.10+
+- Core Framework: JAX
+- Data Format: HDF5 (h5py)
+- Visualisation: Matplotlib
+- Testing: Pytest
+- Type Hints: Throughout codebase
 
-## Timeline
-- Week 1-2: Core data ingestion
-- Week 3-4: Basic visualization
-- Week 5-6: Interactivity and sharing
-- Week 7-8: Testing and deployment
+## Project Structure
+- `src/data.py` - HDF5 data loading and JAX array management
+- `src/models/` - Calibration models with common interface
+  - `base.py` - Abstract base model class defining interface
+  - `least_squares/lsq.py` - Least squares implementation
+  - Future: `conjugate_priors/`, `marginalised_poly/`
+- `src/analysis.py` - Plotting and visualisation functions
+- `src/calibration.py` - Main pipeline orchestration
+- `examples/` - Example scripts demonstrating usage
+
+## Model Interface Standard
+All models must implement:
+- `__init__(config)` - Initialize with configuration
+- `fit(calibration_data)` - Fit model to calibration data
+- `predict(frequency, calibrator)` - Predict temperatures
+- `get_parameters()` - Return noise wave parameters
+- Common input: `CalibrationData` object
+- Common output: `CalibrationResult` object

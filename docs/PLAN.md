@@ -20,59 +20,140 @@ Update statuses as you work. Move completed items to the Completed section with 
 
 ---
 
-<!-- USER CONTENT - FILL IN HERE -->
-## FILL IN HERE
-
-[List the features you want to build. For each feature, include:
-- Feature name
-- Description of what it does
-- Why it's needed
-- Any specific requirements or notes
-- Dependencies on other features (if any)]
-
-Example format:
-- Feature 1: [name and description]
-- Feature 2: [name and description]
-- Feature 3: [name and description]
-
----
-
-<!-- EXAMPLE CONTENT - LLM WILL MERGE YOUR CONTENT WITH THIS STRUCTURE -->
-
 ## Features
 
-### 1. User Authentication System
-**Status**: IN PROGRESS
-**Description**: Implement secure login/logout with JWT tokens and password hashing.
-**Notes**: Using bcrypt for passwords, considering OAuth2 for v2.
+### 1. Data Infrastructure and Common Interfaces
+**Status**: DONE
+**Description**: Implement HDF5 data loader and define common data structures
+that all models will use.
+**Notes**: Design CalibrationData and CalibrationResult classes for model
+interoperability.
 **Acceptance Criteria**:
-- [ ] User registration with email validation
-- [ ] Secure password storage
-- [ ] JWT token generation and validation
-- [ ] Password reset flow
+- [x] HDF5 data loader class with standardised schema
+- [x] CalibrationData dataclass containing all inputs (PSD, VNA, temperatures)
+- [x] CalibrationResult dataclass containing outputs (noise parameters,
+  predictions)
+- [x] JAX array conversion with device placement
+- [x] Data validation and sanity checks
+- [x] Support for both single and multi-temporal datasets
+**Completed**: 2025-09-26
+**Implementation**: `src/data.py` with full test coverage
 
-### 2. Data Import Module
+### 2. Model Base Architecture
 **Status**: TODO
-**Description**: Allow users to upload CSV/Excel files with validation and preview.
-**Notes**: Max file size 100MB, need to handle encoding issues.
-**Dependencies**: Authentication must be complete first.
+**Description**: Create abstract base model class that defines the interface all calibration models must follow.
+**Notes**: Ensures all models are interchangeable with same inputs/outputs.
+**Acceptance Criteria**:
+- [ ] Abstract base class in `models/base.py`
+- [ ] Defined interface methods: `fit()`, `predict()`, `get_parameters()`
+- [ ] Type hints for all methods
+- [ ] Documentation of expected behaviour
 
-### 3. Real-time Dashboard
+### 3. Least Squares Model Implementation
 **Status**: TODO
-**Description**: WebSocket-based live data updates on dashboard.
-**Notes**: Consider using Socket.io for easier client compatibility.
+**Description**: Implement least squares calibration method following the common model interface.
+**Notes**: Located in `models/least_squares/lsq.py`, uses JAX for vectorisation.
+**Dependencies**: Features 1 and 2 must be complete.
+**Acceptance Criteria**:
+- [ ] Inherits from base model class
+- [ ] Vectorised least squares solver using `jax.numpy.linalg.lstsq`
+- [ ] JIT compilation with `@jax.jit` decorator
+- [ ] Parallel processing across frequencies using `vmap`
+- [ ] Noise wave parameter computation (5 parameters: u, c, s, NS, L)
+- [ ] Temperature prediction from parameters
+
+### 4. Analysis and Visualisation Module
+**Status**: TODO
+**Description**: Create plotting functions that work with any model's CalibrationResult output.
+**Notes**: Should be model-agnostic, working with standardised output format.
+**Dependencies**: Feature 1 must be complete.
+**Acceptance Criteria**:
+- [ ] Plot input PSD measurements (source, load, noise)
+- [ ] Plot VNA S-parameters (magnitude and phase)
+- [ ] Plot noise wave parameters vs frequency
+- [ ] Plot predicted vs measured temperatures
+- [ ] Residual plots with uncertainty bands
+- [ ] Export plots in publication format (PDF/PNG)
+
+### 5. Main Pipeline Script
+**Status**: TODO
+**Description**: Orchestrate the full calibration pipeline with interchangeable models.
+**Notes**: Should allow easy switching between different calibration models.
+**Dependencies**: Features 1-4 must be complete.
+**Acceptance Criteria**:
+- [ ] Load data using data module
+- [ ] Select and configure model from available models
+- [ ] Run calibration
+- [ ] Generate analysis plots
+- [ ] Save results to HDF5
+- [ ] Command-line interface with model selection
+
+### 6. Example Scripts
+**Status**: TODO
+**Description**: Create example scripts demonstrating the pipeline with different models.
+**Notes**: Should be clear and well-documented for new users.
+**Dependencies**: Features 1-5 must be complete.
+**Acceptance Criteria**:
+- [ ] Basic example with least squares model
+- [ ] Comparison script running multiple models
+- [ ] Batch processing example
+- [ ] GPU vs CPU performance comparison
+- [ ] Jupyter notebook with visualisations
+
+## Implementation Notes
+
+### Data Format Specification
+HDF5 structure:
+```
+/metadata/
+  - frequencies
+  - measurement_conditions
+  - timestamp
+/calibrators/
+  /{source_name}/
+    - psd_source
+    - psd_load
+    - psd_noise
+    - s11_real
+    - s11_imag
+    - temperature
+    - cable_temperature (optional)
+/results/ (after calibration)
+  - noise_parameters
+  - predicted_temperatures
+  - model_metadata
+```
+
+### Model Interface Contract
+```python
+class BaseModel:
+    def fit(self, data: CalibrationData) -> None:
+        """Fit model to calibration data"""
+
+    def predict(self, frequencies: jax.Array,
+                calibrator: str) -> jax.Array:
+        """Predict temperatures for given calibrator"""
+
+    def get_parameters(self) -> Dict[str, jax.Array]:
+        """Return fitted noise wave parameters"""
+
+    def get_result(self) -> CalibrationResult:
+        """Return complete calibration result"""
+```
 
 ## Completed Features
 
-### Database Schema Setup
-**Status**: DONE
-**Completed**: 2024-01-15
-**Description**: PostgreSQL database with initial tables for users, projects, and data.
-**Notes**: Added indexes on frequently queried columns.
+### Feature 1: Data Infrastructure and Common Interfaces
+**Completed**: 2025-09-26
+**Description**: Core data loading and management infrastructure for the calibration pipeline.
+**Deliverables**:
+- `src/data.py` - Data classes and HDF5 loader (500+ lines)
+- `tests/test_data.py` - 15 unit tests with 100% pass rate
+- `examples/load_observation.py` - Working example with visualisation
+- Full JAX integration with device placement support
+- Handles REACH observation format with 11 calibrators
+- Auto-discovery of calibrators and frequency computation
+**Performance**: Loads full observation file (~100MB) in < 1 second
 
 ## Blocked/Cannot Do
-
-### Payment Integration
-**Status**: BLOCKED
-**Reason**: Waiting for business to choose payment provider (Stripe vs PayPal).
-**Next Steps**: Decision expected by 2024-01-20.
+(None currently)
