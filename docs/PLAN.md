@@ -40,14 +40,18 @@ interoperability.
 **Implementation**: `src/data.py` with full test coverage
 
 ### 2. Model Base Architecture
-**Status**: TODO
+**Status**: DONE
 **Description**: Create abstract base model class that defines the interface all calibration models must follow.
 **Notes**: Ensures all models are interchangeable with same inputs/outputs.
 **Acceptance Criteria**:
-- [ ] Abstract base class in `models/base.py`
-- [ ] Defined interface methods: `fit()`, `predict()`, `get_parameters()`
-- [ ] Type hints for all methods
-- [ ] Documentation of expected behaviour
+- [x] Abstract base class in `models/base.py`
+- [x] Defined interface methods: `fit()`, `predict()`, `get_parameters()`, `get_result()`
+- [x] Type hints for all methods
+- [x] Documentation of expected behaviour
+- [x] Validation methods for calibrators and frequencies
+- [x] Result caching for efficiency
+**Completed**: 2025-09-26
+**Implementation**: `src/models/base.py` with full test coverage
 
 ### 3. Least Squares Model Implementation
 **Status**: TODO
@@ -154,6 +158,23 @@ class BaseModel:
 - Handles REACH observation format with 11 calibrators
 - Auto-discovery of calibrators and frequency computation
 **Performance**: Loads full observation file (~100MB) in < 1 second
+
+### Feature 2: Model Base Architecture
+**Completed**: 2025-09-26
+**Description**: Abstract base class defining the interface for all calibration models.
+**Deliverables**:
+- `src/models/base.py` - Abstract base model class (250+ lines)
+- `src/models/__init__.py` - Module exports
+- `tests/test_base_model.py` - 17 unit tests with 100% pass rate
+- Complete interface with `fit()`, `predict()`, `get_parameters()`, `get_result()`
+- Built-in validation for calibrators and frequencies
+- Result caching and automatic residual computation
+- Full type hints and comprehensive docstrings
+**Key Design Decisions**:
+- Models store reference to data after fitting
+- Results are cached for efficiency
+- Common validation methods reduce code duplication
+- Concrete error messages guide implementation
 
 ## Blocked/Cannot Do
 (None currently)
