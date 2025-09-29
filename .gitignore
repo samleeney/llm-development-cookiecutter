@@ -206,7 +206,6 @@ trained_models/  # For actual trained model files
 # Results and outputs
 results/*
 !results/.gitkeep
-!results/README.md
 outputs/
 checkpoints/
 

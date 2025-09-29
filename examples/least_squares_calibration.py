@@ -58,8 +58,8 @@ def main():
               f"std={float(jnp.std(T_pred)):7.2f} K")
 
     # Create plots
-    print("\nCreating plots (saved to plots/)...")
-    plotter = CalibrationPlotter(output_dir=Path("plots"), save=True, show=False)
+    print("\nCreating plots (saved to results/)...")
+    plotter = CalibrationPlotter(output_dir=Path("results"), save=True, show=False)
     plotter.plot_all_calibrators(filtered_data, model, result, antenna_validation=False)
     plotter.plot_noise_parameters(filtered_data, model, param_smoothing=50)
 

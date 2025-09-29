@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
+from datetime import datetime
 
 
 class CalibrationPlotter:
@@ -43,10 +44,15 @@ class CalibrationPlotter:
         self.show = show
         self.save = save
         self.dpi = dpi
+        self.timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
         # Ensure output directory exists
         if self.save:
             self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def _get_filename(self, description: str) -> Path:
+        """Generate timestamped filename following YYYY-MM-DD_HH-MM-SS_description.ext format."""
+        return self.output_dir / f"{self.timestamp}_{description}.png"
 
     def plot_all_calibrators(self,
                             data,
@@ -138,9 +144,8 @@ class CalibrationPlotter:
         plt.tight_layout()
 
         if self.save:
-            filepath = self.output_dir / 'calibrator_temperatures.png'
+            filepath = self._get_filename('calibrator_temperatures')
             plt.savefig(filepath, bbox_inches='tight')
-            print(f"Saved plot to {filepath}")
 
         if self.show:
             plt.show()
@@ -212,9 +217,8 @@ class CalibrationPlotter:
         plt.tight_layout()
 
         if self.save:
-            filepath = self.output_dir / 'noise_parameters.png'
+            filepath = self._get_filename('noise_parameters')
             plt.savefig(filepath, bbox_inches='tight')
-            print(f"Saved plot to {filepath}")
 
         if self.show:
             plt.show()
@@ -278,9 +282,8 @@ class CalibrationPlotter:
         plt.tight_layout()
 
         if self.save:
-            filepath = self.output_dir / 'residuals_summary.png'
+            filepath = self._get_filename('residuals_summary')
             plt.savefig(filepath, bbox_inches='tight')
-            print(f"Saved plot to {filepath}")
 
         if self.show:
             plt.show()
@@ -354,9 +357,8 @@ class CalibrationPlotter:
         plt.tight_layout()
 
         if self.save:
-            filepath = self.output_dir / 'antenna_temperature.png'
+            filepath = self._get_filename('antenna_temperature')
             plt.savefig(filepath, bbox_inches='tight')
-            print(f"Saved plot to {filepath}")
 
         if self.show:
             plt.show()
@@ -450,9 +452,8 @@ class CalibrationPlotter:
         plt.tight_layout()
 
         if self.save:
-            filepath = self.output_dir / 'calibration_summary.png'
+            filepath = self._get_filename('calibration_summary')
             plt.savefig(filepath, bbox_inches='tight')
-            print(f"Saved plot to {filepath}")
 
         if self.show:
             plt.show()
