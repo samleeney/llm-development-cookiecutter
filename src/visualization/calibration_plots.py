@@ -152,6 +152,124 @@ class CalibrationPlotter:
 
         plt.close()
 
+    def plot_neural_corrections(self,
+                               data,
+                               neural_model,
+                               bin_size: int = 100):
+        """
+        Plot neural network corrections for all calibrators in a grid.
+
+        This method extracts and visualizes the correction term A(freq, Γ_cal)
+        learned by the neural network for each calibrator.
+
+        Args:
+            data: CalibrationData object
+            neural_model: Fitted NeuralCorrectedLSQModel
+            bin_size: Size for binning/smoothing
+        """
+        # Check if model has neural network parameters
+        if not hasattr(neural_model, '_nn_params') or neural_model._nn_params is None:
+            raise ValueError("Model must be a fitted NeuralCorrectedLSQModel")
+
+        # Get list of calibrators
+        cal_names = sorted(data.calibrators.keys())
+        n_cals = len(cal_names)
+
+        # Determine grid layout
+        width = 4
+        height = (n_cals + width - 1) // width
+
+        fig, axes = plt.subplots(height, width,
+                                 figsize=(width*4, height*3.5),
+                                 dpi=self.dpi)
+
+        # Flatten axes array for easier iteration
+        if height == 1:
+            axes = axes.reshape(1, -1)
+
+        freq_mhz = data.psd_frequencies / 1e6
+
+        # Compute corrections for each calibrator
+        all_corrections = []
+        for cal_name in cal_names:
+            cal_data = data.calibrators[cal_name]
+            s11_interp = neural_model._interpolate_s11(
+                cal_data.s11_freq,
+                cal_data.s11_complex,
+                data.psd_frequencies
+            )
+
+            freq_norm = (data.psd_frequencies - neural_model._freq_mean) / (neural_model._freq_std + 1e-10)
+            features = jnp.stack([
+                freq_norm,
+                jnp.abs(s11_interp),
+                jnp.real(s11_interp),
+                jnp.imag(s11_interp)
+            ], axis=1)
+
+            corrections = neural_model._nn_state.apply(neural_model._nn_params, features)
+            all_corrections.append(corrections)
+
+        # Plot each calibrator
+        for idx, cal_name in enumerate(cal_names):
+            row = idx // width
+            col = idx % width
+            ax = axes[row, col]
+
+            # Get correction for this calibrator
+            corrections = all_corrections[idx]
+
+            # Calculate statistics
+            mean_corr = float(jnp.mean(corrections))
+            std_corr = float(jnp.std(corrections))
+            rms_corr = float(jnp.sqrt(jnp.mean(corrections**2)))
+
+            # Plot scatter points
+            ax.scatter(freq_mhz, corrections, s=0.5, alpha=0.5,
+                      color='C1', label='Correction')
+
+            # Add smoothed line
+            if len(corrections) > bin_size:
+                smoothed = jnp.convolve(corrections, jnp.ones(bin_size)/bin_size, mode='valid')
+                smooth_freq = jnp.convolve(freq_mhz, jnp.ones(bin_size)/bin_size, mode='valid')
+                ax.plot(smooth_freq, smoothed, 'k-', linewidth=1.5, alpha=0.8)
+
+            # Add zero line for reference
+            ax.axhline(y=0, color='gray', linestyle='--', linewidth=0.8, alpha=0.7)
+
+            # Add title with statistics
+            ax.set_title(f'{cal_name.upper()} - RMS: {rms_corr:.3f} K\n'
+                        f'Mean: {mean_corr:+.3f} K, Std: {std_corr:.3f} K',
+                        fontsize=9)
+
+            ax.set_xlabel('Frequency (MHz)')
+            ax.set_ylabel('Correction (K)')
+            ax.grid(True, alpha=0.3)
+
+            # Use individual y-axis scaling for each calibrator (no margin)
+            local_min = float(jnp.min(corrections))
+            local_max = float(jnp.max(corrections))
+            ax.set_ylim(local_min, local_max)
+
+        # Hide unused subplots
+        for idx in range(n_cals, height * width):
+            row = idx // width
+            col = idx % width
+            axes[row, col].axis('off')
+
+        plt.suptitle('Neural Network Corrections A(freq, Γ_cal)',
+                    fontsize=14, fontweight='bold')
+        plt.tight_layout()
+
+        if self.save:
+            filepath = self._get_filename('neural_corrections')
+            plt.savefig(filepath, bbox_inches='tight')
+
+        if self.show:
+            plt.show()
+
+        plt.close()
+
     def plot_noise_parameters(self,
                              data,
                              model,

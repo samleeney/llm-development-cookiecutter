@@ -72,8 +72,9 @@ A JAX-based calibration pipeline that provides:
 - `src/models/` - Calibration models with common interface
   - `base.py` - Abstract base model class defining interface
   - `least_squares/lsq.py` - Least squares implementation
+  - `neural_corrected_lsq/neural_lsq.py` - Hybrid physics-ML calibration
   - Future: `conjugate_priors/`, `marginalised_poly/`
-- `src/analysis.py` - Plotting and visualisation functions
+- `src/visualization/` - Plotting and visualisation functions
 - `src/calibration.py` - Main pipeline orchestration
 - `examples/` - Example scripts demonstrating usage
 

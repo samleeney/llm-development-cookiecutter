@@ -22,20 +22,25 @@ jaxcal/
 │   │   ├── __init__.py    # Module exports
 │   │   ├── base.py        # Abstract base model (COMPLETE)
 │   │   ├── io.py          # Model save/load (COMPLETE)
-│   │   └── least_squares/ # Least squares implementation (COMPLETE)
+│   │   ├── least_squares/ # Least squares implementation (COMPLETE)
+│   │   │   ├── __init__.py
+│   │   │   └── lsq.py
+│   │   └── neural_corrected_lsq/ # Neural-corrected LSQ (COMPLETE)
 │   │       ├── __init__.py
-│   │       └── lsq.py
+│   │       └── neural_lsq.py
 │   └── visualization/     # Plotting and analysis
 │       └── calibration_plots.py  # Comprehensive plots (COMPLETE)
 ├── tests/                 # Test files
 │   ├── test_data.py       # Data module tests (COMPLETE)
 │   ├── test_base_model.py # Base model tests (COMPLETE)
-│   └── test_least_squares.py # Least squares tests (COMPLETE)
+│   ├── test_least_squares.py # Least squares tests (COMPLETE)
+│   └── test_neural_corrected_lsq.py # Neural-corrected LSQ tests (COMPLETE)
 ├── scripts/               # Utility scripts
 │   └── convert_test_data_to_hdf5.py  # Convert test dataset (COMPLETE)
 ├── examples/              # Example scripts
 │   ├── load_observation.py  # Data loading example (COMPLETE)
-│   └── least_squares_calibration.py  # Full pipeline example (COMPLETE)
+│   ├── least_squares_calibration.py  # Full pipeline example (COMPLETE)
+│   └── neural_corrected_lsq_calibration.py  # Hybrid physics-ML example (COMPLETE)
 ├── data/                  # Data files
 │   ├── reach_observation.hdf5  # Sample REACH observation
 │   └── test_observation.hdf5   # Converted test dataset
@@ -113,6 +118,27 @@ jaxcal/
   - Synthetic data: RMSE < 0.001K on calibration sources
   - Antenna prediction: ~5000K (physically accurate)
 - **Test Coverage**: 6 comprehensive tests, 100% pass rate
+
+### Module: Neural-Corrected LSQ Model (`src/models/neural_corrected_lsq/neural_lsq.py`) ✅
+- **Purpose**: Hybrid physics-ML calibration combining analytical least squares with neural network corrections
+- **Status**: COMPLETE - ready for real data testing
+- **Key Classes**:
+  - `NeuralCorrectedLSQModel`: Two-stage hybrid calibration model
+  - `CorrectionNetwork`: Flax neural network for frequency-dependent corrections
+- **Dependencies**: data, models.base, JAX, Flax, Optax
+- **Features**:
+  - **Two-stage fitting**: Analytical LSQ (frozen) → Neural network training
+  - **Preserves physical interpretation**: LSQ parameters remain identical to pure LSQ
+  - **Neural inputs**: [frequency, |Γ_cal|, Re(Γ_cal), Im(Γ_cal)]
+  - **Neural output**: Scalar correction A(freq, Γ_cal)
+  - **Final prediction**: T = F(θ, measurements, freq) + A(freq, Γ_cal)
+  - **Regularisation**: Penalty on |A|² to prefer small corrections
+  - **JIT-compiled training**: Fast optimisation with Adam
+  - **Configurable architecture**: Hidden layer sizes, learning rate, iterations
+- **Performance**:
+  - Synthetic data: Corrections RMS < 0.01K (as expected, since model is sufficient)
+  - Real data: Expected to capture unmodeled systematics (switches, cable gradients)
+- **Test Coverage**: 11 comprehensive tests, 100% pass rate
 
 ### Module: Visualisation (`src/visualization/calibration_plots.py`) ✅
 - **Purpose**: Comprehensive plotting functionality for calibration results
@@ -220,6 +246,8 @@ class HDF5DataLoader:
 - **jaxlib**: 0.4.0+ (JAX backend)
 - **NumPy**: 1.24.0+ (array operations)
 - **h5py**: 3.0.0+ (HDF5 I/O)
+- **Flax**: 0.8.0+ (neural networks for JAX)
+- **Optax**: 0.1.9+ (optimisation for JAX)
 
 ### Development Requirements
 - **pytest**: 7.4.0+ (testing framework)
@@ -232,9 +260,17 @@ class HDF5DataLoader:
 - **JAX Arrays**: Zero-copy conversion where possible
 - **Device Support**: CPU by default, GPU optional
 
-## Recent Improvements (2024-09)
+## Recent Improvements
 
-### LNA S11 Support
+### Neural-Corrected Least Squares (2025-09)
+- **Innovation**: Hybrid physics-ML calibration approach
+- **Method**: Two-stage fitting preserving analytical LSQ solution
+- **Inputs**: Frequency and reflection coefficient (Γ_cal) features
+- **Output**: Correction function A(freq, Γ_cal) for systematic effects
+- **Validation**: Corrections ≈0 on synthetic data (as expected)
+- **Application**: Will capture unmodeled effects in real observations
+
+### LNA S11 Support (2024-09)
 - **Problem**: Matrix ill-conditioning (condition number ~10^18) with zero Gamma_rec
 - **Solution**: Mandatory loading and use of actual LNA S11 data
 - **Impact**: Improved numerical stability and calibration accuracy

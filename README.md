@@ -69,22 +69,52 @@ result = model.get_result()
 T_ant = result.predicted_temperatures['ant']
 ```
 
-### Visualization
+### Neural-Corrected Calibration
+
+```python
+from src.models.neural_corrected_lsq import NeuralCorrectedLSQModel
+
+# Configure neural-corrected model
+config = {
+    'hidden_layers': [64, 64, 32],
+    'learning_rate': 1e-3,
+    'n_iterations': 2000,
+    'correction_regularization': 0.01
+}
+
+# Fit hybrid physics-ML model
+model = NeuralCorrectedLSQModel(config)
+model.fit(masked_data)
+
+# Get noise wave parameters (identical to pure LSQ)
+params = model.get_parameters()
+
+# Get correction statistics
+correction_stats = model.get_correction_magnitude()
+print(f"Neural corrections RMS: {correction_stats['rms']:.3f} K")
+```
+
+### Visualisation
 
 ```python
 from src.visualization.calibration_plots import CalibrationPlotter
 
 # Create comprehensive plots
 plotter = CalibrationPlotter(output_dir=Path("plots"), save=True)
-plotter.create_summary_plot(masked_data, model, result)
+plotter.plot_all_calibrators(masked_data, model, result)
+
+# For neural-corrected models, also plot corrections
+plotter.plot_neural_corrections(masked_data, model)
 ```
 
 ## Key Features
 
-- **JAX-based**: Fully vectorized operations with GPU acceleration support
+- **JAX-based**: Fully vectorised operations with GPU acceleration support
 - **HDF5 Support**: Efficient loading of REACH observation format
-- **Least Squares Calibration**: Extract noise wave parameters (u, c, s, NS, L)
-- **Comprehensive Visualization**: Publication-quality plots for analysis
+- **Multiple Calibration Models**:
+  - Least Squares: Extract noise wave parameters (u, c, s, NS, L)
+  - Neural-Corrected LSQ: Hybrid physics-ML approach for systematic corrections
+- **Comprehensive Visualisation**: Publication-quality plots for analysis
 - **Validated Performance**:
   - Calibration sources: RMSE < 0.001K (synthetic data)
   - Antenna prediction: ~5000K (physically accurate)
@@ -113,8 +143,9 @@ See `docs/PLAN.md` for detailed progress on features and upcoming work.
 - HDF5 data loading infrastructure
 - Base model architecture
 - Least squares calibration implementation
+- Neural-corrected least squares (hybrid physics-ML)
 - LNA S11 support (critical for accurate calibration)
-- Comprehensive visualization suite
+- Comprehensive visualisation suite
 - Full test coverage
 
 ### Performance Metrics
@@ -131,6 +162,7 @@ jaxcal/
 │   ├── models/            # Calibration models
 │   │   ├── base.py        # Abstract base model
 │   │   ├── least_squares/ # Least squares implementation
+│   │   ├── neural_corrected_lsq/  # Neural-corrected LSQ
 │   │   └── io.py          # Model persistence
 │   └── visualization/     # Plotting utilities
 ├── tests/                 # Unit tests

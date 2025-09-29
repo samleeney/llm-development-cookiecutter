@@ -16,10 +16,11 @@ Keep this updated with actual test commands and any special testing requirements
 ## Test Structure
 ```
 tests/
-├── test_data.py           # Data infrastructure tests (COMPLETE)
-├── test_base_model.py     # Base model interface tests (COMPLETE)
-├── test_least_squares.py  # Least squares implementation tests (COMPLETE - Enhanced 2025-09-29)
-└── fixtures/             # Test data and mocks (if needed)
+├── test_data.py                    # Data infrastructure tests (COMPLETE)
+├── test_base_model.py              # Base model interface tests (COMPLETE)
+├── test_least_squares.py           # Least squares implementation tests (COMPLETE - Enhanced 2025-09-29)
+├── test_neural_corrected_lsq.py    # Neural-corrected LSQ tests (COMPLETE - Added 2025-09-29)
+└── fixtures/                       # Test data and mocks (if needed)
 ```
 
 ## Test Data
@@ -113,6 +114,31 @@ python -m pytest tests/ -v --tb=short
   - c10short: RMSE = 0.0003K
   - r100: RMSE = 0.0001K
   - antenna: RMSE = 14.19K
+
+### test_neural_corrected_lsq.py ✅
+**Status**: COMPLETE - Added 2025-09-29 (11 comprehensive tests, 100% passing)
+**Coverage**: Full validation of hybrid physics-ML calibration
+**Test Classes**:
+- `TestNeuralCorrectedLSQModel`: Comprehensive tests for two-stage model
+  - Two-stage fitting validation (analytical LSQ → NN training)
+  - LSQ parameter preservation (rel_diff < 1e-6 vs pure LSQ)
+  - Correction magnitude on synthetic data (RMS < 1K expected)
+  - Predictions combine linear and neural components correctly
+  - Result interface compatibility with BaseModel
+  - Multiple model configurations (architecture, regularisation)
+  - Antenna prediction with corrections
+  - RMSE requirements (< 1K on synthetic calibration sources)
+  - Configuration retrieval
+  - Prediction shapes validation
+  - Error handling for unfitted model
+**Performance Metrics on Synthetic Data**:
+  - Neural corrections: RMS = 0.0088K (near zero, as expected)
+  - LSQ parameters: Identical to pure LSQ (analytical solution preserved)
+  - Training converges in ~100-500 iterations
+**Performance Metrics on Real REACH Data**:
+  - Mean RMSE improvement: +50.50% over pure LSQ
+  - Neural corrections: RMS = 4.59K (captures systematic effects)
+  - Antenna RMSE: -0.02% change (no overfitting, good generalisation)
 
 ## Test Data
 - **Sample HDF5**: `data/reach_observation.hdf5`

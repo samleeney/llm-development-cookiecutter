@@ -72,7 +72,28 @@ interoperability.
 **Implementation**: `src/models/least_squares/lsq.py` with full test coverage
 **Performance**: RMSE < 0.001K on synthetic calibration sources
 
-### 4. Analysis and Visualisation Module
+### 4. Neural-Corrected Least Squares Model
+**Status**: DONE
+**Description**: Implement hybrid physics-ML calibration combining analytical least squares with neural network corrections for unmodeled systematic effects.
+**Notes**: Two-stage fitting preserves physical interpretation of LSQ parameters while adding learned corrections.
+**Dependencies**: Features 1, 2, 3 must be complete.
+**Acceptance Criteria**:
+- [x] Inherits from base model class
+- [x] Stage 1: Analytical least squares (frozen parameters)
+- [x] Stage 2: Neural network training on residuals
+- [x] Neural inputs: [frequency, |Γ_cal|, Re(Γ_cal), Im(Γ_cal)]
+- [x] Neural output: Scalar correction A(freq, Γ_cal)
+- [x] Final prediction: T = F(θ, measurements, freq) + A(freq, Γ_cal)
+- [x] Regularisation to prefer small corrections
+- [x] JIT-compiled training with Adam optimiser
+- [x] Configurable architecture (hidden layers, learning rate, iterations)
+- [x] Validation on synthetic data (corrections ≈ 0)
+**Completed**: 2025-09-29
+**Implementation**: `src/models/neural_corrected_lsq/neural_lsq.py` with full test coverage
+**Performance**: Corrections RMS < 0.01K on synthetic data (as expected, since physical model is sufficient)
+**Future Work**: Test on real observational data to measure systematic effect corrections
+
+### 5. Analysis and Visualisation Module
 **Status**: DONE
 **Description**: Create plotting functions that work with any model's CalibrationResult output.
 **Notes**: Model-agnostic, working with standardised output format.
@@ -87,11 +108,11 @@ interoperability.
 **Completed**: 2025-09-29
 **Implementation**: `src/visualization/calibration_plots.py` with comprehensive plotting suite
 
-### 5. Main Pipeline Script
+### 6. Main Pipeline Script
 **Status**: IN PROGRESS
 **Description**: Orchestrate the full calibration pipeline with interchangeable models.
 **Notes**: Basic pipeline implemented via example script.
-**Dependencies**: Features 1-4 must be complete.
+**Dependencies**: Features 1-5 must be complete.
 **Acceptance Criteria**:
 - [x] Load data using data module
 - [x] Select and configure model from available models
@@ -101,19 +122,21 @@ interoperability.
 - [ ] Command-line interface with model selection
 **Partial Implementation**: `examples/least_squares_calibration.py` provides working pipeline
 
-### 6. Example Scripts
+### 7. Example Scripts
 **Status**: IN PROGRESS
 **Description**: Create example scripts demonstrating the pipeline with different models.
 **Notes**: Clear and well-documented for new users.
-**Dependencies**: Features 1-5 must be complete.
+**Dependencies**: Features 1-6 must be complete.
 **Acceptance Criteria**:
 - [x] Basic example with least squares model
+- [x] Neural-corrected least squares example
 - [ ] Comparison script running multiple models
 - [ ] Batch processing example
 - [ ] GPU vs CPU performance comparison
 - [ ] Jupyter notebook with visualisations
 **Implementation**:
 - `examples/least_squares_calibration.py` - Full calibration pipeline
+- `examples/neural_corrected_lsq_calibration.py` - Hybrid physics-ML pipeline
 - `examples/load_observation.py` - Data loading demonstration
 
 ## Implementation Notes
@@ -158,6 +181,24 @@ class BaseModel:
 ```
 
 ## Recent Improvements (2025-09-29)
+
+### Neural-Corrected Least Squares Model
+**Description**: Implemented hybrid physics-ML calibration combining analytical least squares with neural network corrections.
+**Changes**:
+- Added `src/models/neural_corrected_lsq/neural_lsq.py` with two-stage fitting
+- Added `tests/test_neural_corrected_lsq.py` with 11 comprehensive tests
+- Added `examples/neural_corrected_lsq_calibration.py` demonstration script
+- Added Flax and Optax dependencies for JAX neural networks
+**Features**:
+- Two-stage fitting preserves analytical LSQ solution (frozen θ parameters)
+- Neural network learns corrections A(freq, Γ_cal) on residuals
+- Regularisation prefers small corrections
+- Configurable architecture and training parameters
+**Validation**:
+- Corrections RMS < 0.01K on synthetic data (as expected)
+- LSQ parameters identical to pure LSQ model (analytical solution preserved)
+- All 11 tests pass successfully
+**Future Work**: Test on real observational data to measure systematic effect corrections
 
 ### LNA S11 Support and Numerical Stability
 **Description**: Fixed critical matrix ill-conditioning issue by adding mandatory LNA S11 support.
