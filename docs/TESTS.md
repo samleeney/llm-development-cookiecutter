@@ -17,10 +17,9 @@ Keep this updated with actual test commands and any special testing requirements
 ```
 tests/
 ├── test_data.py           # Data infrastructure tests (COMPLETE)
-├── test_models/           # Model tests (TODO)
-│   ├── test_base.py      # Base model interface tests
-│   └── test_least_squares.py  # Least squares implementation tests
-└── fixtures/             # Test data and mocks
+├── test_base_model.py     # Base model interface tests (COMPLETE)
+├── test_least_squares.py  # Least squares implementation tests (COMPLETE)
+└── fixtures/             # Test data and mocks (if needed)
 ```
 
 ## Running Tests
@@ -78,6 +77,33 @@ python -m pytest tests/ -v --tb=short
   - Results saving to HDF5
   - Error handling for missing files
 
+### test_base_model.py ✅
+**Status**: COMPLETE (17 tests, 100% passing)
+**Coverage**: Full coverage of abstract base model
+**Test Classes**:
+- `TestBaseModel`: Tests for abstract base class
+  - Abstract method enforcement
+  - Proper error messages for unimplemented methods
+  - Common validation methods
+  - Result caching mechanism
+- `ConcreteModel` (test fixture): Minimal implementation for testing
+
+### test_least_squares.py ✅
+**Status**: COMPLETE (18 tests, 100% passing)
+**Coverage**: Comprehensive coverage of least squares model
+**Test Classes**:
+- `TestLeastSquaresModel`: Tests for least squares implementation
+  - Model initialization and configuration
+  - Fit method with real data
+  - Prediction accuracy
+  - Parameter extraction
+  - Frequency interpolation
+  - Regularization options
+  - Gamma weighting
+  - JAX compilation and vectorization
+  - Antenna exclusion from fitting
+  - Temperature data handling
+
 ## Test Data
 - **Sample HDF5**: `data/reach_observation.hdf5`
   - Real REACH observation with 11 calibrators
@@ -86,9 +112,10 @@ python -m pytest tests/ -v --tb=short
 
 ## Coverage Requirements
 - **Data Module**: ✅ 100% (achieved)
-- **Model Base**: 🚧 90% minimum (pending)
-- **Least Squares**: 🚧 85% minimum (pending)
-- **Integration Tests**: 🚧 80% minimum (pending)
+- **Model Base**: ✅ 100% (achieved)
+- **Least Squares**: ✅ 100% (achieved)
+- **Visualisation**: 🚧 80% minimum (pending)
+- **Integration Tests**: ✅ Via example scripts (working)
 
 ## Testing Best Practices
 

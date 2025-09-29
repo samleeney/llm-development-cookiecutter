@@ -18,23 +18,38 @@ Keep this document in sync with your actual implementation. It serves as the tec
 jaxcal/
 ├── src/                    # Source code
 │   ├── data.py            # Data infrastructure (COMPLETE)
-│   └── models/            # Calibration models
-│       ├── __init__.py    # Module exports
-│       ├── base.py        # Abstract base model (COMPLETE)
-│       └── least_squares/ # Least squares implementation (TODO)
-│           └── lsq.py
+│   ├── models/            # Calibration models
+│   │   ├── __init__.py    # Module exports
+│   │   ├── base.py        # Abstract base model (COMPLETE)
+│   │   ├── io.py          # Model save/load (COMPLETE)
+│   │   └── least_squares/ # Least squares implementation (COMPLETE)
+│   │       ├── __init__.py
+│   │       └── lsq.py
+│   └── visualization/     # Plotting and analysis
+│       └── calibration_plots.py  # Comprehensive plots (COMPLETE)
 ├── tests/                 # Test files
 │   ├── test_data.py       # Data module tests (COMPLETE)
-│   └── test_base_model.py # Base model tests (COMPLETE)
+│   ├── test_base_model.py # Base model tests (COMPLETE)
+│   └── test_least_squares.py # Least squares tests (COMPLETE)
+├── scripts/               # Utility scripts
+│   └── convert_test_data_to_hdf5.py  # Convert test dataset (COMPLETE)
+├── examples/              # Example scripts
+│   ├── load_observation.py  # Data loading example (COMPLETE)
+│   └── least_squares_calibration.py  # Full pipeline example (COMPLETE)
 ├── data/                  # Data files
-│   └── reach_observation.hdf5  # Sample REACH observation
+│   ├── reach_observation.hdf5  # Sample REACH observation
+│   └── test_observation.hdf5   # Converted test dataset
+├── plots/                 # Generated plots
+│   ├── calibration_summary.png
+│   ├── antenna_temperature.png
+│   └── residuals_summary.png
 ├── docs/                  # Documentation
-│   ├── FEATURE_PLANS/     # Feature implementation plans
 │   ├── PROJECT_GOAL.md    # Project objectives
 │   ├── PLAN.md           # Development roadmap
-│   └── ARCHITECTURE.md   # This file
-├── examples/              # Example scripts
-│   └── load_observation.py  # Data loading example (COMPLETE)
+│   ├── ARCHITECTURE.md   # This file
+│   ├── HOW_TO_DEV.md     # Development workflow
+│   ├── TESTS.md          # Testing documentation
+│   └── CONVENTIONS.md    # Code standards
 ├── venv/                  # Virtual environment with JAX
 ├── requirements.txt       # Python dependencies
 └── results/               # Output files
@@ -90,7 +105,35 @@ jaxcal/
   - X matrix construction from S-parameters and PSD
   - Support for regularisation and gamma weighting
   - Temperature extraction with proper error handling
-- **Test Coverage**: 18 unit tests, 89% pass rate
+  - Excludes antenna from fitting (antenna is the target)
+- **Test Coverage**: 18 unit tests, 100% pass rate
+
+### Module: Visualisation (`src/visualization/calibration_plots.py`) ✅
+- **Purpose**: Comprehensive plotting functionality for calibration results
+- **Status**: COMPLETE
+- **Key Functions**:
+  - `plot_calibrator_temperatures()`: Grid plot of all calibrator temperatures
+  - `plot_noise_parameters()`: All 5 noise wave parameters vs frequency
+  - `plot_residuals_summary()`: Statistical analysis of calibration residuals
+  - `plot_antenna_temperature()`: Dedicated antenna temperature plot
+  - `plot_calibration_summary()`: Multi-panel comprehensive summary
+- **Dependencies**: matplotlib, JAX arrays, CalibrationData, CalibrationResult
+- **Features**:
+  - Publication-quality plots with customisable styling
+  - Automatic layout adjustment for different numbers of calibrators
+  - Residual analysis with RMSE, bias, and standard deviation
+  - Support for frequency masking and data filtering
+
+### Module: Model I/O (`src/models/io.py`) ✅
+- **Purpose**: Save and load calibration models
+- **Status**: COMPLETE
+- **Key Functions**:
+  - `save_model()`: Save model parameters and metadata to HDF5
+  - `load_model()`: Restore model from HDF5 file
+- **Features**:
+  - Preserves all model parameters and fitted state
+  - Includes metadata for reproducibility
+  - Compatible with all model types via base interface
 
 ## Data Flow
 
@@ -110,7 +153,7 @@ CalibrationData
     ↓
 Filtered CalibrationData
     ↓
-[Model Processing] ← TODO
+[LeastSquaresModel.fit()]
     ↓
 CalibrationResult
     ├── Noise Parameters (u, c, s, NS, L)
@@ -128,11 +171,11 @@ CalibrationResult
   - Shape: (12288,) complex values per calibrator
   - Frequency: 50-200 MHz (direct measurement)
 
-- **Calibrators**: 11 standard sources
-  - Temperature references: hot, cold
-  - Impedance standards: r25, r100, c2r27, c2r36, c2r69, c2r91
+- **Calibrators**: 12 standard sources (ant excluded from fitting)
+  - Temperature references: hot (~372K), cold (~271K)
+  - Impedance standards: c10r10, c10r250, c2r27, c2r36, c2r69, c2r91, r25, r100
   - Terminations: c10open, c10short
-  - Antenna: ant
+  - Antenna: ant (calibration target, not used in fitting)
 
 ## Key Interfaces
 

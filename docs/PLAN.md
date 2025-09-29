@@ -69,42 +69,48 @@ interoperability.
 **Implementation**: `src/models/least_squares/lsq.py` with full test coverage
 
 ### 4. Analysis and Visualisation Module
-**Status**: TODO
+**Status**: DONE
 **Description**: Create plotting functions that work with any model's CalibrationResult output.
-**Notes**: Should be model-agnostic, working with standardised output format.
+**Notes**: Model-agnostic, working with standardised output format.
 **Dependencies**: Feature 1 must be complete.
 **Acceptance Criteria**:
-- [ ] Plot input PSD measurements (source, load, noise)
-- [ ] Plot VNA S-parameters (magnitude and phase)
-- [ ] Plot noise wave parameters vs frequency
-- [ ] Plot predicted vs measured temperatures
-- [ ] Residual plots with uncertainty bands
-- [ ] Export plots in publication format (PDF/PNG)
+- [x] Plot input PSD measurements (source, load, noise)
+- [x] Plot VNA S-parameters (magnitude and phase)
+- [x] Plot noise wave parameters vs frequency
+- [x] Plot predicted vs measured temperatures
+- [x] Residual plots with statistical analysis
+- [x] Export plots in publication format (PDF/PNG)
+**Completed**: 2025-09-29
+**Implementation**: `src/visualization/calibration_plots.py` with comprehensive plotting suite
 
 ### 5. Main Pipeline Script
-**Status**: TODO
+**Status**: IN PROGRESS
 **Description**: Orchestrate the full calibration pipeline with interchangeable models.
-**Notes**: Should allow easy switching between different calibration models.
+**Notes**: Basic pipeline implemented via example script.
 **Dependencies**: Features 1-4 must be complete.
 **Acceptance Criteria**:
-- [ ] Load data using data module
-- [ ] Select and configure model from available models
-- [ ] Run calibration
-- [ ] Generate analysis plots
-- [ ] Save results to HDF5
+- [x] Load data using data module
+- [x] Select and configure model from available models
+- [x] Run calibration
+- [x] Generate analysis plots
+- [x] Save results to HDF5
 - [ ] Command-line interface with model selection
+**Partial Implementation**: `examples/least_squares_calibration.py` provides working pipeline
 
 ### 6. Example Scripts
-**Status**: TODO
+**Status**: IN PROGRESS
 **Description**: Create example scripts demonstrating the pipeline with different models.
-**Notes**: Should be clear and well-documented for new users.
+**Notes**: Clear and well-documented for new users.
 **Dependencies**: Features 1-5 must be complete.
 **Acceptance Criteria**:
-- [ ] Basic example with least squares model
+- [x] Basic example with least squares model
 - [ ] Comparison script running multiple models
 - [ ] Batch processing example
 - [ ] GPU vs CPU performance comparison
 - [ ] Jupyter notebook with visualisations
+**Implementation**:
+- `examples/least_squares_calibration.py` - Full calibration pipeline
+- `examples/load_observation.py` - Data loading demonstration
 
 ## Implementation Notes
 
@@ -148,6 +154,22 @@ class BaseModel:
 ```
 
 ## Completed Features
+
+### Feature 4: Analysis and Visualisation Module
+**Completed**: 2025-09-29
+**Description**: Comprehensive plotting and visualization for calibration results.
+**Deliverables**:
+- `src/visualization/calibration_plots.py` - Complete plotting suite (600+ lines)
+- 5 different plot types: calibrator temperatures, noise parameters, residuals, antenna, summary
+- Publication-quality plots with automatic layout adjustment
+- Statistical analysis including RMSE, bias, and standard deviation
+- Supports all calibrator types and frequency masking
+**Key Features**:
+- Model-agnostic design working with CalibrationResult interface
+- Automatic subplot arrangement based on number of calibrators
+- Residual analysis with comprehensive statistics
+- Antenna temperature prediction with smoothing options
+- Multi-panel summary plots for complete overview
 
 ### Feature 3: Least Squares Model Implementation
 **Completed**: 2025-09-26

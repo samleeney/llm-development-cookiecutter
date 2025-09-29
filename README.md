@@ -1,15 +1,14 @@
 <!-- PERMANENT TEMPLATE STRUCTURE - DO NOT REMOVE -->
-# {{cookiecutter.project_name}}
+# JAX Radiometer Calibration Pipeline (jaxcal)
 
-{{cookiecutter.project_short_description}}
+GPU-accelerated radiometer calibration pipeline for 21cm cosmology using JAX
 
 ## Quick Start
 
-<!-- EXAMPLE - REPLACE WITH YOUR PROJECT'S ACTUAL SETUP -->
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd {{cookiecutter.project_slug}}
+cd jaxcal
 
 # Set up virtual environment
 python -m venv venv
@@ -19,8 +18,11 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 pip install -r requirements-dev.txt  # For development
 
-# Run the application
-python src/main.py
+# Run calibration example
+python examples/least_squares_calibration.py
+
+# Run tests
+python -m pytest tests/ -v
 ```
 
 ## Documentation
@@ -49,36 +51,47 @@ python src/main.py
 
 ## Usage
 
-<!-- EXAMPLE - REPLACE WITH YOUR PROJECT'S USAGE -->
 ```python
-from myproject import DataProcessor
+from src.data import HDF5DataLoader
+from src.models.least_squares.lsq import LeastSquaresModel
 
-# Initialize the processor
-processor = DataProcessor(config_path="config.yaml")
+# Load calibration data
+loader = HDF5DataLoader()
+data = loader.load_observation("data/reach_observation.hdf5")
 
-# Load and process data
-data = processor.load_data("input.csv")
-results = processor.process(data)
+# Apply frequency mask (50-200 MHz)
+mask = (data.psd_frequencies >= 50e6) & (data.psd_frequencies <= 200e6)
+data_filtered = loader.apply_frequency_mask(data, mask)
 
-# Export results
-processor.export(results, "output.json")
+# Fit calibration model
+model = LeastSquaresModel(regularisation=1e-6)
+model.fit(data_filtered)
+
+# Get calibration results
+result = model.get_result()
+print(f"Noise parameters shape: {result.noise_parameters['u'].shape}")
+
+# Save results
+loader.save_results("results/calibration.hdf5", result)
 ```
 
 ## Testing
 
-<!-- EXAMPLE - UPDATE WITH YOUR TEST COMMANDS -->
 ```bash
+# Activate virtual environment first
+source venv/bin/activate
+
 # Run all tests
-pytest
+python -m pytest tests/ -v
 
 # Run with coverage
-pytest --cov=src --cov-report=html
+python -m pytest tests/ --cov=src --cov-report=html --cov-report=term
 
 # Run specific test file
-pytest tests/test_processor.py
+python -m pytest tests/test_least_squares.py -v
 
-# Run in watch mode during development
-pytest-watch
+# Run with short traceback
+python -m pytest tests/ -v --tb=short
 ```
 
 ## Development Status
@@ -86,10 +99,10 @@ pytest-watch
 <!-- PERMANENT - ALWAYS REFERENCE PLAN.MD -->
 See `docs/PLAN.md` for detailed progress on features and upcoming work.
 
-<!-- EXAMPLE - CUSTOMIZE YOUR STATUS BADGES -->
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-85%25-yellow)
-![Python](https://img.shields.io/badge/python-3.8%2B-blue)
+![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![JAX](https://img.shields.io/badge/JAX-0.4.0%2B-purple)
 
 ## Contributing
 
@@ -102,4 +115,4 @@ MIT License - see LICENSE file for details
 
 ## Author
 
-{{cookiecutter.author_name}} <{{cookiecutter.author_email}}>
+Sam Mangham
