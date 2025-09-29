@@ -74,17 +74,30 @@ T_ant = result.predicted_temperatures['ant']
 ```python
 from src.models.neural_corrected_lsq import NeuralCorrectedLSQModel
 
-# Configure neural-corrected model
+# Configure neural-corrected model with validation monitoring
 config = {
     'hidden_layers': [64, 64, 32],
     'learning_rate': 1e-3,
     'n_iterations': 2000,
-    'correction_regularization': 0.01
+    'correction_regularization': 0.01,
+    'validation_check_interval': 50,  # Check validation every 50 iterations
+    'early_stopping_patience': 10,     # Stop if no improvement for 10 checks
+    'min_delta': 1e-4                  # Minimum improvement threshold
 }
 
-# Fit hybrid physics-ML model
+# Prepare validation data (e.g., held-out calibrator)
+validation_calibrators = {'c2r91': masked_data.calibrators['c2r91']}
+validation_data = CalibrationData(
+    calibrators=validation_calibrators,
+    psd_frequencies=masked_data.psd_frequencies,
+    vna_frequencies=masked_data.vna_frequencies,
+    lna_s11=masked_data.lna_s11,
+    metadata=masked_data.metadata
+)
+
+# Fit hybrid physics-ML model with early stopping
 model = NeuralCorrectedLSQModel(config)
-model.fit(masked_data)
+model.fit(training_data, validation_data=validation_data)
 
 # Get noise wave parameters (identical to pure LSQ)
 params = model.get_parameters()

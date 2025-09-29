@@ -126,12 +126,27 @@ def main():
         'hidden_layers': [64, 64, 32],
         'learning_rate': 1e-3,
         'n_iterations': 2000,
-        'correction_regularization': 0.01
+        'correction_regularization': 0.01,
+        'validation_check_interval': 50,
+        'early_stopping_patience': 10,
+        'min_delta': 1e-4
     }
+
+    # Prepare validation data (c2r91 only)
+    validation_calibrators = {
+        'c2r91': masked_data.calibrators['c2r91']
+    }
+    validation_data = CalibrationData(
+        calibrators=validation_calibrators,
+        psd_frequencies=masked_data.psd_frequencies,
+        vna_frequencies=masked_data.vna_frequencies,
+        lna_s11=masked_data.lna_s11,
+        metadata=masked_data.metadata
+    )
 
     print("\nFitting neural-corrected least squares model...")
     neural_model = NeuralCorrectedLSQModel(neural_config)
-    neural_model.fit(training_data)
+    neural_model.fit(training_data, validation_data=validation_data)
     neural_result = neural_model.get_result()
 
     # Add c2r91 validation predictions
