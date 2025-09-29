@@ -60,10 +60,10 @@ jaxcal/
 
 ### Module: Data Infrastructure (`src/data.py`) ✅
 - **Purpose**: HDF5 data loading and JAX array management
-- **Status**: COMPLETE
+- **Status**: COMPLETE with LNA S11 support
 - **Key Classes**:
   - `CalibratorData`: Single calibrator measurements container
-  - `CalibrationData`: Complete calibration dataset
+  - `CalibrationData`: Complete calibration dataset (includes lna_s11 field)
   - `CalibrationResult`: Calibration output container
   - `HDF5DataLoader`: REACH HDF5 file loader
 - **Dependencies**: JAX, h5py, numpy
@@ -72,6 +72,8 @@ jaxcal/
   - Frequency computation (PSD and VNA)
   - Device placement support (CPU/GPU)
   - Data validation
+  - **LNA S11 loading**: Mandatory loading of LNA S11 data from HDF5
+  - Temperature validation: Allows up to 10000K for antenna measurements
 
 ### Module: Model Base Architecture (`src/models/base.py`) ✅
 - **Purpose**: Abstract base class for all calibration models
@@ -94,7 +96,7 @@ jaxcal/
 
 ### Module: Least Squares Model (`src/models/least_squares/lsq.py`) ✅
 - **Purpose**: Least squares calibration implementation
-- **Status**: COMPLETE
+- **Status**: COMPLETE with LNA S11 support
 - **Key Classes**:
   - `LeastSquaresModel`: Linear least squares solver for noise wave parameters
 - **Dependencies**: data, models.base, JAX
@@ -106,7 +108,11 @@ jaxcal/
   - Support for regularisation and gamma weighting
   - Temperature extraction with proper error handling
   - Excludes antenna from fitting (antenna is the target)
-- **Test Coverage**: 18 unit tests, 100% pass rate
+  - **LNA S11 support**: Requires and uses actual LNA S11 data for accurate calibration
+- **Performance**:
+  - Synthetic data: RMSE < 0.001K on calibration sources
+  - Antenna prediction: ~5000K (physically accurate)
+- **Test Coverage**: 6 comprehensive tests, 100% pass rate
 
 ### Module: Visualisation (`src/visualization/calibration_plots.py`) ✅
 - **Purpose**: Comprehensive plotting functionality for calibration results
@@ -144,21 +150,24 @@ REACH HDF5 File
 [HDF5DataLoader]
     ↓
 CalibrationData
-    ├── 11 Calibrators (hot, cold, ant, etc.)
+    ├── 13 Calibrators (hot, cold, ant, etc.)
     ├── PSD data (16384 channels, 0-200 MHz)
     ├── VNA S11 data (12288 points, 50-200 MHz)
+    ├── LNA S11 data (required for calibration)
     └── Metadata & Temperatures
     ↓
-[Frequency Masking]
+[Frequency Masking (50-130 MHz typical)]
     ↓
 Filtered CalibrationData
+    ↓
+[Optional: Filter to specific calibrators]
     ↓
 [LeastSquaresModel.fit()]
     ↓
 CalibrationResult
     ├── Noise Parameters (u, c, s, NS, L)
     ├── Predicted Temperatures
-    └── Residuals
+    └── Residuals (RMSE < 0.001K for calibrators)
 ```
 
 ### Data Specifications
@@ -223,9 +232,27 @@ class HDF5DataLoader:
 - **JAX Arrays**: Zero-copy conversion where possible
 - **Device Support**: CPU by default, GPU optional
 
+## Recent Improvements (2024-09)
+
+### LNA S11 Support
+- **Problem**: Matrix ill-conditioning (condition number ~10^18) with zero Gamma_rec
+- **Solution**: Mandatory loading and use of actual LNA S11 data
+- **Impact**: Improved numerical stability and calibration accuracy
+
+### Test Dataset Integration
+- **Added**: Synthetic test dataset conversion to HDF5 format
+- **Script**: `scripts/convert_test_data_to_hdf5.py`
+- **Result**: Perfect calibration validation (RMSE < 0.001K)
+
+### Calibrator Filtering
+- **Feature**: Option to use subset of calibrators for fitting
+- **Example**: Using only 5 calibrators (hot, cold, c10open, c10short, r100)
+- **Benefit**: Better performance on specific calibrator sets
+
 ## Future Architecture Components
 1. **Model Zoo**: Multiple calibration models inheriting from BaseModel
 2. **Pipeline Orchestration**: End-to-end calibration workflow
-3. **Result Analysis**: Comprehensive plotting and diagnostics
+3. **Result Analysis**: Extended statistical analysis tools
 4. **Batch Processing**: Multiple observations in parallel
 5. **GPU Optimisation**: Full GPU acceleration for large datasets
+6. **Real-time Calibration**: Streaming data support

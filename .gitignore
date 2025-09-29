@@ -73,6 +73,8 @@ docs/_build/
 .pybuilder/
 target/
 
+calibration_pipeline_example
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
@@ -179,6 +181,7 @@ data/processed/
 data/interim/
 *.csv
 *.h5
+*.hdf5
 *.pkl
 *.pickle
 *.npy
@@ -247,7 +250,6 @@ prompts_cache/
 
 # Custom project-specific
 # Add your own patterns here
+.archive/
 observation_overview.png
-*.hdf5
 plots/
-calibration_pipeline_example/

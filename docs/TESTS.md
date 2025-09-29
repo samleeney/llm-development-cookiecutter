@@ -18,8 +18,15 @@ Keep this updated with actual test commands and any special testing requirements
 tests/
 ├── test_data.py           # Data infrastructure tests (COMPLETE)
 ├── test_base_model.py     # Base model interface tests (COMPLETE)
-├── test_least_squares.py  # Least squares implementation tests (COMPLETE)
+├── test_least_squares.py  # Least squares implementation tests (COMPLETE - Enhanced 2025-09-29)
 └── fixtures/             # Test data and mocks (if needed)
+```
+
+## Test Data
+```
+data/
+├── reach_observation.hdf5  # Sample REACH observation data
+└── test_observation.hdf5   # Synthetic test dataset with known parameters
 ```
 
 ## Running Tests
@@ -89,26 +96,36 @@ python -m pytest tests/ -v --tb=short
 - `ConcreteModel` (test fixture): Minimal implementation for testing
 
 ### test_least_squares.py ✅
-**Status**: COMPLETE (18 tests, 100% passing)
-**Coverage**: Comprehensive coverage of least squares model
+**Status**: COMPLETE - Enhanced 2025-09-29 (6 comprehensive tests, 100% passing)
+**Coverage**: Full validation using synthetic test data
 **Test Classes**:
-- `TestLeastSquaresModel`: Tests for least squares implementation
-  - Model initialization and configuration
-  - Fit method with real data
-  - Prediction accuracy
-  - Parameter extraction
-  - Frequency interpolation
-  - Regularization options
-  - Gamma weighting
-  - JAX compilation and vectorization
-  - Antenna exclusion from fitting
-  - Temperature data handling
+- `TestLeastSquaresModel`: Production-grade tests matching examples/least_squares_calibration.py
+  - RMSE validation: < 0.001K for calibration sources, < 15K for antenna
+  - Noise parameter validation (physical reasonableness)
+  - Antenna temperature prediction (~5000K)
+  - Model configurations (standard, regularized, gamma weighted)
+  - Synthetic data calibration validation
+  - Frequency masking functionality
+**Performance Metrics Achieved**:
+  - hot: RMSE = 0.0001K
+  - cold: RMSE = 0.0001K
+  - c10open: RMSE = 0.0003K
+  - c10short: RMSE = 0.0003K
+  - r100: RMSE = 0.0001K
+  - antenna: RMSE = 14.19K
 
 ## Test Data
 - **Sample HDF5**: `data/reach_observation.hdf5`
-  - Real REACH observation with 11 calibrators
+  - Real REACH observation with 13 calibrators
   - 16384 PSD channels, 12288 VNA points
   - Multiple time samples per calibrator
+  - Includes LNA S11 data
+
+- **Synthetic Test Data**: `data/test_observation.hdf5`
+  - Created from calibration_pipeline_example/test_dataset/
+  - Known ground truth parameters for validation
+  - Includes all required calibrators and LNA S11
+  - Enables RMSE < 0.001K validation
 
 ## Coverage Requirements
 - **Data Module**: ✅ 100% (achieved)

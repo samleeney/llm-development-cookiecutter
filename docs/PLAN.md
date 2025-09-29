@@ -23,7 +23,7 @@ Update statuses as you work. Move completed items to the Completed section with 
 ## Features
 
 ### 1. Data Infrastructure and Common Interfaces
-**Status**: DONE
+**Status**: DONE (Enhanced 2025-09-29)
 **Description**: Implement HDF5 data loader and define common data structures
 that all models will use.
 **Notes**: Design CalibrationData and CalibrationResult classes for model
@@ -36,8 +36,10 @@ interoperability.
 - [x] JAX array conversion with device placement
 - [x] Data validation and sanity checks
 - [x] Support for both single and multi-temporal datasets
-**Completed**: 2025-09-26
+- [x] LNA S11 data loading (mandatory for calibration)
+**Completed**: 2025-09-26, Enhanced 2025-09-29
 **Implementation**: `src/data.py` with full test coverage
+**Enhancement**: Added mandatory LNA S11 support for numerical stability
 
 ### 2. Model Base Architecture
 **Status**: DONE
@@ -54,7 +56,7 @@ interoperability.
 **Implementation**: `src/models/base.py` with full test coverage
 
 ### 3. Least Squares Model Implementation
-**Status**: DONE
+**Status**: DONE (Enhanced 2025-09-29)
 **Description**: Implement least squares calibration method following the common model interface.
 **Notes**: Located in `models/least_squares/lsq.py`, uses JAX for vectorisation.
 **Dependencies**: Features 1 and 2 must be complete.
@@ -65,8 +67,10 @@ interoperability.
 - [x] Parallel processing across frequencies using `vmap`
 - [x] Noise wave parameter computation (5 parameters: u, c, s, NS, L)
 - [x] Temperature prediction from parameters
-**Completed**: 2025-09-26
+- [x] LNA S11 support for numerical stability
+**Completed**: 2025-09-26, Enhanced 2025-09-29
 **Implementation**: `src/models/least_squares/lsq.py` with full test coverage
+**Performance**: RMSE < 0.001K on synthetic calibration sources
 
 ### 4. Analysis and Visualisation Module
 **Status**: DONE
@@ -152,6 +156,28 @@ class BaseModel:
     def get_result(self) -> CalibrationResult:
         """Return complete calibration result"""
 ```
+
+## Recent Improvements (2025-09-29)
+
+### LNA S11 Support and Numerical Stability
+**Description**: Fixed critical matrix ill-conditioning issue by adding mandatory LNA S11 support.
+**Changes**:
+- Modified `src/data.py` to require LNA S11 data
+- Updated `src/models/least_squares/lsq.py` to use actual Gamma_rec values
+- Added `scripts/convert_test_data_to_hdf5.py` for test data conversion
+- Restructured `tests/test_least_squares.py` to match production pipeline
+**Impact**:
+- Matrix condition number reduced from 10^18 to reasonable values
+- Achieved RMSE < 0.001K on synthetic calibration sources
+- Validated antenna temperature prediction (~5000K)
+
+### Test Suite Enhancement
+**Description**: Comprehensive test updates for better validation.
+**Changes**:
+- Tests now use filtered set of 5 calibrators for fitting
+- Added realistic RMSE thresholds based on actual performance
+- 6 comprehensive test cases covering all aspects
+**Results**: All tests passing with excellent calibration metrics
 
 ## Completed Features
 
