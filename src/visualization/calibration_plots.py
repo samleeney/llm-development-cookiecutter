@@ -270,6 +270,122 @@ class CalibrationPlotter:
 
         plt.close()
 
+    def plot_correction_fourier_transforms(self,
+                                          data,
+                                          neural_model):
+        """
+        Plot Fourier transforms of neural network corrections for all calibrators.
+
+        This reveals the frequency content of the learned corrections, helping
+        identify periodic systematic effects.
+
+        Args:
+            data: CalibrationData object
+            neural_model: Fitted NeuralCorrectedLSQModel
+        """
+        # Check if model has neural network parameters
+        if not hasattr(neural_model, '_nn_params') or neural_model._nn_params is None:
+            raise ValueError("Model must be a fitted NeuralCorrectedLSQModel")
+
+        # Get list of calibrators
+        cal_names = sorted(data.calibrators.keys())
+        n_cals = len(cal_names)
+
+        # Determine grid layout
+        width = 4
+        height = (n_cals + width - 1) // width
+
+        fig, axes = plt.subplots(height, width,
+                                 figsize=(width*4, height*3.5),
+                                 dpi=self.dpi)
+
+        # Flatten axes array for easier iteration
+        if height == 1:
+            axes = axes.reshape(1, -1)
+
+        # Plot each calibrator
+        for idx, cal_name in enumerate(cal_names):
+            row = idx // width
+            col = idx % width
+            ax = axes[row, col]
+
+            # Get correction for this calibrator
+            cal_data = data.calibrators[cal_name]
+            s11_interp = neural_model._interpolate_s11(
+                cal_data.s11_freq,
+                cal_data.s11_complex,
+                data.psd_frequencies
+            )
+
+            freq_norm = (data.psd_frequencies - neural_model._freq_mean) / (neural_model._freq_std + 1e-10)
+            features = jnp.stack([
+                freq_norm,
+                jnp.abs(s11_interp),
+                jnp.real(s11_interp),
+                jnp.imag(s11_interp)
+            ], axis=1)
+
+            corrections = neural_model._nn_state.apply(neural_model._nn_params, features)
+
+            # Compute FFT
+            fft_values = jnp.fft.fft(corrections)
+            fft_magnitude = jnp.abs(fft_values)
+
+            # Frequency axis for FFT
+            n_samples = len(corrections)
+            freq_spacing = float(data.psd_frequencies[1] - data.psd_frequencies[0])
+            fft_freqs = jnp.fft.fftfreq(n_samples, freq_spacing)
+
+            # Only plot positive frequencies
+            positive_freq_mask = fft_freqs >= 0
+            fft_freqs_positive = fft_freqs[positive_freq_mask]
+            fft_magnitude_positive = fft_magnitude[positive_freq_mask]
+
+            # Convert to period (1/frequency) for interpretability
+            # Avoid division by zero for DC component
+            periods = jnp.where(fft_freqs_positive > 0, 1.0 / fft_freqs_positive, jnp.inf)
+
+            # Plot magnitude spectrum vs period
+            ax.semilogy(periods / 1e6, fft_magnitude_positive, linewidth=1, alpha=0.8)
+
+            # Calculate dominant period (excluding DC)
+            if len(fft_magnitude_positive) > 1:
+                dominant_idx = jnp.argmax(fft_magnitude_positive[1:]) + 1  # Skip DC
+                dominant_period = float(periods[dominant_idx]) / 1e6  # MHz
+                dominant_mag = float(fft_magnitude_positive[dominant_idx])
+
+                if not jnp.isinf(dominant_period):
+                    ax.axvline(dominant_period, color='r', linestyle='--',
+                              alpha=0.5, linewidth=0.8)
+                    ax.text(0.98, 0.95, f'Peak: {dominant_period:.1f} MHz',
+                           transform=ax.transAxes, ha='right', va='top',
+                           fontsize=8, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+            ax.set_xlabel('Period (MHz)')
+            ax.set_ylabel('FFT Magnitude')
+            ax.set_title(f'{cal_name.upper()}')
+            ax.grid(True, alpha=0.3, which='both')
+            ax.set_xlim(left=float(1.0 / fft_freqs_positive[-1]) / 1e6 if fft_freqs_positive[-1] > 0 else 0.1)
+
+        # Hide unused subplots
+        for idx in range(n_cals, height * width):
+            row = idx // width
+            col = idx % width
+            axes[row, col].axis('off')
+
+        plt.suptitle('Fourier Transform of Neural Network Corrections',
+                    fontsize=14, fontweight='bold')
+        plt.tight_layout()
+
+        if self.save:
+            filepath = self._get_filename('correction_fft')
+            plt.savefig(filepath, bbox_inches='tight')
+
+        if self.show:
+            plt.show()
+
+        plt.close()
+
     def plot_noise_parameters(self,
                              data,
                              model,
