@@ -202,12 +202,11 @@ class CalibrationPlotter:
             freq_norm = (data.psd_frequencies - neural_model._freq_mean) / (neural_model._freq_std + 1e-10)
             features = jnp.stack([
                 freq_norm,
-                jnp.abs(s11_interp),
-                jnp.real(s11_interp),
-                jnp.imag(s11_interp)
+                jnp.abs(s11_interp),    # Magnitude of S11
+                jnp.angle(s11_interp)   # Phase of S11
             ], axis=1)
 
-            corrections = neural_model._nn_state.apply(neural_model._nn_params, features)
+            corrections = neural_model._nn_state.apply(neural_model._nn_params, features, deterministic=True)
             all_corrections.append(corrections)
 
         # Plot each calibrator
@@ -320,12 +319,11 @@ class CalibrationPlotter:
             freq_norm = (data.psd_frequencies - neural_model._freq_mean) / (neural_model._freq_std + 1e-10)
             features = jnp.stack([
                 freq_norm,
-                jnp.abs(s11_interp),
-                jnp.real(s11_interp),
-                jnp.imag(s11_interp)
+                jnp.abs(s11_interp),    # Magnitude of S11
+                jnp.angle(s11_interp)   # Phase of S11
             ], axis=1)
 
-            corrections = neural_model._nn_state.apply(neural_model._nn_params, features)
+            corrections = neural_model._nn_state.apply(neural_model._nn_params, features, deterministic=True)
 
             # Compute FFT
             fft_values = jnp.fft.fft(corrections)
@@ -687,6 +685,60 @@ class CalibrationPlotter:
 
         if self.save:
             filepath = self._get_filename('calibration_summary')
+            plt.savefig(filepath, bbox_inches='tight')
+
+        if self.show:
+            plt.show()
+
+        plt.close()
+    def plot_s11_components(self, data):
+        """
+        Plot real and imaginary components of S11 for all calibrators.
+
+        Args:
+            data: CalibrationData object
+        """
+        cal_names = sorted(data.calibrators.keys())
+
+        fig, (ax_real, ax_imag) = plt.subplots(2, 1, figsize=(12, 10), dpi=self.dpi)
+
+        # Color cycle for different calibrators
+        colors = plt.cm.tab20(np.linspace(0, 1, len(cal_names)))
+
+        for idx, cal_name in enumerate(cal_names):
+            cal_data = data.calibrators[cal_name]
+
+            # Get S11 data
+            freq_mhz = cal_data.s11_freq / 1e6
+            s11_complex = cal_data.s11_complex
+
+            # Plot real part
+            ax_real.plot(freq_mhz, jnp.real(s11_complex),
+                        label=cal_name.upper(), color=colors[idx], linewidth=1.5, alpha=0.8)
+
+            # Plot imaginary part
+            ax_imag.plot(freq_mhz, jnp.imag(s11_complex),
+                        label=cal_name.upper(), color=colors[idx], linewidth=1.5, alpha=0.8)
+
+        # Configure real plot
+        ax_real.set_xlabel('Frequency (MHz)')
+        ax_real.set_ylabel('Re(S11)')
+        ax_real.set_title('S11 Real Component - All Calibrators')
+        ax_real.legend(loc='best', ncol=2, fontsize=8)
+        ax_real.grid(True, alpha=0.3)
+
+        # Configure imaginary plot
+        ax_imag.set_xlabel('Frequency (MHz)')
+        ax_imag.set_ylabel('Im(S11)')
+        ax_imag.set_title('S11 Imaginary Component - All Calibrators')
+        ax_imag.legend(loc='best', ncol=2, fontsize=8)
+        ax_imag.grid(True, alpha=0.3)
+
+        plt.suptitle('S11 Components for All Calibrators', fontsize=14, fontweight='bold')
+        plt.tight_layout()
+
+        if self.save:
+            filepath = self._get_filename('s11_components')
             plt.savefig(filepath, bbox_inches='tight')
 
         if self.show:

@@ -44,16 +44,19 @@ class CorrectionNetwork(nn.Module):
 
     Attributes:
         hidden_layers: Tuple of hidden layer sizes (e.g., (32, 32))
+        dropout_rate: Dropout rate (default: 0.0, no dropout)
     """
     hidden_layers: Sequence[int] = (32, 32)
+    dropout_rate: float = 0.0
 
     @nn.compact
-    def __call__(self, x: jax.Array) -> jax.Array:
+    def __call__(self, x: jax.Array, deterministic: bool = True) -> jax.Array:
         """
         Forward pass through the network.
 
         Args:
-            x: Input features [batch, 4] containing [freq, |Γ|, Re(Γ), Im(Γ)]
+            x: Input features [batch, 3] containing [freq, |Γ|, arg(Γ)]
+            deterministic: If True, disable dropout (inference mode)
 
         Returns:
             Correction values [batch,]
@@ -61,6 +64,8 @@ class CorrectionNetwork(nn.Module):
         for hidden_size in self.hidden_layers:
             x = nn.Dense(hidden_size)(x)
             x = nn.relu(x)
+            if self.dropout_rate > 0:
+                x = nn.Dropout(rate=self.dropout_rate, deterministic=deterministic)(x)
 
         # Output layer - no activation (can be positive or negative)
         x = nn.Dense(1)(x)
@@ -108,6 +113,7 @@ class NeuralCorrectedLSQModel(BaseModel):
         self.learning_rate = self.config.get('learning_rate', 1e-3)
         self.n_iterations = self.config.get('n_iterations', 1000)
         self.correction_regularization = self.config.get('correction_regularization', 0.01)
+        self.dropout_rate = self.config.get('dropout_rate', 0.0)
 
         # Validation and early stopping configuration
         self.validation_check_interval = self.config.get('validation_check_interval', 50)
@@ -280,7 +286,7 @@ class NeuralCorrectedLSQModel(BaseModel):
                 # Compute residuals
                 residuals = T_true - T_linear
 
-                # Prepare input features [freq, |Γ|, Re(Γ), Im(Γ)]
+                # Prepare input features [freq, |Γ|, arg(Γ)]
                 s11_interp = self._interpolate_s11(
                     cal_data.s11_freq,
                     cal_data.s11_complex,
@@ -289,9 +295,8 @@ class NeuralCorrectedLSQModel(BaseModel):
 
                 features = jnp.stack([
                     frequencies,
-                    jnp.abs(s11_interp),
-                    jnp.real(s11_interp),
-                    jnp.imag(s11_interp)
+                    jnp.abs(s11_interp),    # Magnitude of S11
+                    jnp.angle(s11_interp)   # Phase of S11
                 ], axis=1)
 
                 inputs_list.append(features)
@@ -318,18 +323,18 @@ class NeuralCorrectedLSQModel(BaseModel):
             val_inputs = val_inputs.at[:, 0].set((val_inputs[:, 0] - self._freq_mean) / (self._freq_std + 1e-10))
 
         # Initialise network
-        network = CorrectionNetwork(hidden_layers=self.hidden_layers)
+        network = CorrectionNetwork(hidden_layers=self.hidden_layers, dropout_rate=self.dropout_rate)
         rng = jax.random.PRNGKey(0)
-        params = network.init(rng, train_inputs[:10])  # Initialise with small batch
+        params = network.init(rng, train_inputs[:10], deterministic=False)  # Initialise with small batch
 
         # Set up optimiser
         optimizer = optax.adam(self.learning_rate)
         opt_state = optimizer.init(params)
 
-        # Define training loss function (with regularization)
+        # Define training loss function (with regularization, dropout enabled)
         @jax.jit
-        def train_loss_fn(params, inputs, targets):
-            predictions = network.apply(params, inputs)
+        def train_loss_fn(params, inputs, targets, rng):
+            predictions = network.apply(params, inputs, deterministic=False, rngs={'dropout': rng})
 
             # MSE loss on residuals
             mse_loss = jnp.mean((predictions - targets)**2)
@@ -339,10 +344,10 @@ class NeuralCorrectedLSQModel(BaseModel):
 
             return mse_loss + reg_loss, {'mse': mse_loss, 'reg': reg_loss}
 
-        # Define validation loss function (without regularization)
+        # Define validation loss function (without regularization, dropout disabled)
         @jax.jit
         def val_loss_fn(params, inputs, targets):
-            predictions = network.apply(params, inputs)
+            predictions = network.apply(params, inputs, deterministic=True)
 
             # MSE loss only
             mse_loss = jnp.mean((predictions - targets)**2)
@@ -351,8 +356,8 @@ class NeuralCorrectedLSQModel(BaseModel):
 
         # Training step
         @jax.jit
-        def train_step(params, opt_state, inputs, targets):
-            (loss_val, metrics), grads = jax.value_and_grad(train_loss_fn, has_aux=True)(params, inputs, targets)
+        def train_step(params, opt_state, inputs, targets, rng):
+            (loss_val, metrics), grads = jax.value_and_grad(train_loss_fn, has_aux=True)(params, inputs, targets, rng)
             updates, opt_state = optimizer.update(grads, opt_state)
             params = optax.apply_updates(params, updates)
             return params, opt_state, loss_val, metrics
@@ -362,16 +367,19 @@ class NeuralCorrectedLSQModel(BaseModel):
         best_params = params
         patience_counter = 0
 
-        # Training loop
+        # Training loop with dropout RNG
+        dropout_rng = jax.random.PRNGKey(1)  # Separate RNG for dropout
         for i in range(self.n_iterations):
-            params, opt_state, loss_val, metrics = train_step(params, opt_state, train_inputs, train_targets)
+            dropout_rng, step_rng = jax.random.split(dropout_rng)
+            params, opt_state, loss_val, metrics = train_step(params, opt_state, train_inputs, train_targets, step_rng)
 
             # Validation check
             check_validation = (validation_data is not None and
                               i % self.validation_check_interval == 0)
 
             if i % 100 == 0 or check_validation:
-                log_str = f"  Iteration {i}/{self.n_iterations}: train_loss={loss_val:.6f}"
+                train_rmse = jnp.sqrt(metrics['mse'])
+                log_str = f"  Iteration {i}/{self.n_iterations}: train_rmse={train_rmse:.6f}"
 
                 if check_validation:
                     val_loss, val_metrics = val_loss_fn(params, val_inputs, val_targets)
@@ -575,12 +583,11 @@ class NeuralCorrectedLSQModel(BaseModel):
 
         features = jnp.stack([
             freq_norm,
-            jnp.abs(s11_interp),
-            jnp.real(s11_interp),
-            jnp.imag(s11_interp)
+            jnp.abs(s11_interp),    # Magnitude of S11
+            jnp.angle(s11_interp)   # Phase of S11
         ], axis=1)
 
-        A_correction = self._nn_state.apply(self._nn_params, features)
+        A_correction = self._nn_state.apply(self._nn_params, features, deterministic=True)
 
         # Combined prediction
         return T_linear + A_correction
@@ -629,12 +636,11 @@ class NeuralCorrectedLSQModel(BaseModel):
             freq_norm = (self._frequencies - self._freq_mean) / (self._freq_std + 1e-10)
             features = jnp.stack([
                 freq_norm,
-                jnp.abs(s11_interp),
-                jnp.real(s11_interp),
-                jnp.imag(s11_interp)
+                jnp.abs(s11_interp),    # Magnitude of S11
+                jnp.angle(s11_interp)   # Phase of S11
             ], axis=1)
 
-            A = self._nn_state.apply(self._nn_params, features)
+            A = self._nn_state.apply(self._nn_params, features, deterministic=True)
             corrections.append(A)
 
         corrections = jnp.concatenate(corrections)

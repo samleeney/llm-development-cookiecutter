@@ -62,8 +62,10 @@ def main():
     print(f"Frequency range: {float(masked_data.vna_frequencies[0])/1e6:.1f} - "
           f"{float(masked_data.vna_frequencies[-1])/1e6:.1f} MHz")
     print(f"Total calibrators: {len(masked_data.calibrator_names)}")
+    print(f"Calibrator names: {sorted(masked_data.calibrator_names)}")
     print(f"Validation calibrator: c2r91 (excluded from training)")
     print(f"Training calibrators: {len([n for n in masked_data.calibrator_names if n != 'c2r91'])}")
+    print(f"Training names: {sorted([n for n in masked_data.calibrator_names if n != 'c2r91'])}")
 
     # ========================================================================
     # Method 1: Pure Least Squares
@@ -102,10 +104,14 @@ def main():
 
     print("✓ Fitting complete")
 
+    print("\nGenerating S11 components plot...")
+    plotter_lsq = CalibrationPlotter(output_dir=Path("results/pure_lsq"), save=True, show=False)
+    plotter_lsq.plot_s11_components(masked_data)
+    print("✓ Saved to results/pure_lsq/s11_components_*.png")
+
     print("\nGenerating calibration temperature plots...")
     # Use full data for plotting (includes c2r91 validation)
     lsq_model._data = masked_data
-    plotter_lsq = CalibrationPlotter(output_dir=Path("results/pure_lsq"), save=True, show=False)
     plotter_lsq.plot_all_calibrators(
         masked_data,
         lsq_model,
@@ -123,12 +129,13 @@ def main():
 
     neural_config = {
         'regularisation': 0.0,
-        'hidden_layers': [64, 64, 32],
+        'hidden_layers': [128, 128, 128],
         'learning_rate': 1e-3,
-        'n_iterations': 2000,
-        'correction_regularization': 0.01,
+        'n_iterations': 3000,
+        'correction_regularization': 0.01,  # Regularization on corrections
+        'dropout_rate': 0.2,  # Dropout rate for regularization
         'validation_check_interval': 50,
-        'early_stopping_patience': 10,
+        'early_stopping_patience': 100,
         'min_delta': 1e-4
     }
 
@@ -146,7 +153,7 @@ def main():
 
     print("\nFitting neural-corrected least squares model...")
     neural_model = NeuralCorrectedLSQModel(neural_config)
-    neural_model.fit(training_data, validation_data=validation_data)
+    neural_model.fit(training_data)  # No validation_data = no early stopping
     neural_result = neural_model.get_result()
 
     # Add c2r91 validation predictions
@@ -156,6 +163,17 @@ def main():
     c2r91_true = masked_data.calibrators['c2r91'].temperature
     neural_result.predicted_temperatures['c2r91'] = c2r91_pred_neural
     neural_result.residuals['c2r91'] = c2r91_pred_neural - c2r91_true
+
+    # Compute and report c2r91 validation RMSE
+    import jax.numpy as jnp
+    c2r91_rmse_neural = jnp.sqrt(jnp.mean((c2r91_pred_neural - c2r91_true)**2))
+    print(f"  c2r91 validation RMSE (neural): {c2r91_rmse_neural:.6f} K")
+
+    # Also report pure LSQ for comparison
+    c2r91_rmse_lsq = jnp.sqrt(jnp.mean((c2r91_pred - c2r91_true)**2))
+    print(f"  c2r91 validation RMSE (pure LSQ): {c2r91_rmse_lsq:.6f} K")
+    print(f"  Improvement: {(1 - c2r91_rmse_neural/c2r91_rmse_lsq)*100:.1f}%")
+
     # Restore training data reference
     neural_model._data = training_data
 
@@ -192,13 +210,15 @@ def main():
     print("COMPLETE")
     print("=" * 70)
     print("\nGenerated plots:")
-    print("  1. Pure LSQ:                results/pure_lsq/calibrator_temperatures_*.png")
-    print("  2. Neural-Corrected LSQ:    results/neural_corrected_lsq/calibrator_temperatures_*.png")
-    print("  3. Neural Corrections:      results/neural_corrected_lsq/neural_corrections_*.png")
-    print("  4. Correction FFT:          results/neural_corrected_lsq/correction_fft_*.png")
-    print("\nPlots 1 & 2: Compare to see improvement in fit quality")
-    print("Plot 3:      Correction terms A(freq, Γ_cal) in frequency domain")
-    print("Plot 4:      FFT of corrections reveals periodic systematic effects")
+    print("  1. S11 Components:          results/pure_lsq/s11_components_*.png")
+    print("  2. Pure LSQ:                results/pure_lsq/calibrator_temperatures_*.png")
+    print("  3. Neural-Corrected LSQ:    results/neural_corrected_lsq/calibrator_temperatures_*.png")
+    print("  4. Neural Corrections:      results/neural_corrected_lsq/neural_corrections_*.png")
+    print("  5. Correction FFT:          results/neural_corrected_lsq/correction_fft_*.png")
+    print("\nPlot 1:      S11 real and imaginary components for all calibrators")
+    print("Plots 2 & 3: Compare to see improvement in fit quality")
+    print("Plot 4:      Correction terms A(freq, Γ_cal) in frequency domain")
+    print("Plot 5:      FFT of corrections reveals periodic systematic effects")
 
 
 if __name__ == '__main__':
