@@ -249,3 +249,5 @@ prompts_cache/
 # Add your own patterns here
 observation_overview.png
 *.hdf5
+plots/
+calibration_pipeline_example/
