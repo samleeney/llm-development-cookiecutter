@@ -281,9 +281,8 @@ class HDF5DataLoader:
         # Load timestamps
         timestamps = self._to_jax_array(obs_data[f'{name}_timestamps'][:])
 
-        # TODO: Extract temperature for this specific calibrator
-        # This requires mapping from calibrator name to temperature sensor
-        temperature = None
+        # Extract temperature for this specific calibrator
+        temperature = self._get_calibrator_temperature(h5file, name)
 
         return CalibratorData(
             name=name,
@@ -295,6 +294,80 @@ class HDF5DataLoader:
             timestamps=timestamps,
             temperature=temperature
         )
+
+    def _get_calibrator_temperature(self, h5file: h5py.File, name: str) -> jax.Array:
+        """
+        Extract temperature for specific calibrator.
+
+        Maps calibrator names to temperature sensor columns based on
+        REACH observation setup.
+
+        Args:
+            h5file: Open HDF5 file object
+            name: Calibrator name
+
+        Returns:
+            Temperature in Kelvin (scalar or array)
+
+        Raises:
+            ValueError: If temperature data is missing or cannot be extracted
+        """
+        # Temperature sensor mapping for REACH calibrators
+        # Based on analysis: column 2 is hot (~372K), column 8 is cold (~271K)
+        # Others are room temperature sources (~285-287K)
+        sensor_mapping = {
+            'hot': 2,      # Hot load at ~372K
+            'cold': 8,     # Cold load at ~271K
+            'ant': 0,      # Antenna
+            'r25': 1,      # 25 ohm resistor (room temp)
+            'r100': 3,     # 100 ohm resistor (room temp)
+            'c2r27': 4,    # 2m cable with 27 ohm
+            'c2r36': 5,    # 2m cable with 36 ohm
+            'c2r69': 6,    # 2m cable with 69 ohm
+            'c2r91': 7,    # 2m cable with 91 ohm
+            'c10open': 1,  # 10m cable open (room temp)
+            'c10short': 1, # 10m cable short (room temp)
+            'c10r10': 1,   # 10m cable with 10 ohm (room temp)
+            'c10r250': 1,  # 10m cable with 250 ohm (room temp)
+        }
+
+        # Check if we have a mapping for this calibrator
+        if name not in sensor_mapping:
+            raise ValueError(f"No temperature sensor mapping defined for calibrator '{name}'")
+
+        try:
+            obs_metadata = h5file['observation_metadata']
+            if 'temperatures' not in obs_metadata:
+                raise ValueError(f"No temperature data found in HDF5 file metadata")
+
+            temperatures = obs_metadata['temperatures'][:]  # Shape: [n_time, n_sensors]
+
+            # Get the sensor index for this calibrator
+            sensor_idx = sensor_mapping[name]
+
+            # Validate sensor index
+            if sensor_idx >= temperatures.shape[1]:
+                raise ValueError(f"Temperature sensor index {sensor_idx} out of range "
+                               f"for calibrator '{name}' (only {temperatures.shape[1]} sensors)")
+
+            # Extract temperature from the appropriate column
+            cal_temp = temperatures[:, sensor_idx]
+
+            # Take mean over time for stable temperature
+            mean_temp = float(np.mean(cal_temp))
+
+            # Validate temperature is reasonable
+            if not (0 < mean_temp < 1000):
+                raise ValueError(f"Invalid temperature {mean_temp}K for calibrator '{name}'")
+
+            return self._to_jax_array(mean_temp)
+
+        except KeyError as e:
+            raise ValueError(f"Failed to extract temperature for calibrator '{name}': "
+                           f"Missing data in HDF5 file - {e}")
+        except IndexError as e:
+            raise ValueError(f"Failed to extract temperature for calibrator '{name}': "
+                           f"Invalid sensor index - {e}")
 
     def _compute_psd_frequencies(self, h5file: h5py.File) -> jax.Array:
         """

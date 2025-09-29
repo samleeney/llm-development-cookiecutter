@@ -189,7 +189,8 @@ data/interim/
 *.sqlite
 
 # Model files
-models/
+# models/  # Commented out to allow src/models/ source code
+trained_models/  # For actual trained model files
 *.pth
 *.pt
 *.onnx
@@ -246,6 +247,5 @@ prompts_cache/
 
 # Custom project-specific
 # Add your own patterns here
-calibration_pipeline_example/
 observation_overview.png
 *.hdf5
