@@ -215,13 +215,17 @@ class LeastSquaresModel(BaseModel):
             frequencies
         )
 
-        # For receiver S11, we need to handle it differently
-        # For now, use a default value or get from metadata
-        # In real implementation, this would come from LNA S11 measurements
-        Gamma_rec = jnp.zeros_like(s11_interp)  # Placeholder
-        if 'lna_s11' in self._data.metadata:
-            # If LNA S11 is available in metadata
-            Gamma_rec = self._data.metadata['lna_s11']
+        # Get receiver S11 (LNA S11) - REQUIRED
+        if self._data.lna_s11 is None:
+            raise ValueError("LNA S11 data is required for calibration but was not found. "
+                           "Ensure the HDF5 file contains 'lna_s11' dataset.")
+
+        # Interpolate LNA S11 to target frequencies
+        Gamma_rec = self._interpolate_s11(
+            self._data.vna_frequencies,
+            self._data.lna_s11,
+            frequencies
+        )
 
         Gamma_cal = s11_interp
 

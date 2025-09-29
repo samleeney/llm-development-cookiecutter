@@ -92,6 +92,7 @@ class CalibrationData:
         metadata: Configuration and observation metadata
         temperatures: Temperature sensor readings [n_time, n_sensors]
         temperature_timestamps: Temperature measurement timestamps
+        lna_s11: LNA S11 parameters [n_freq] (optional)
     """
     calibrators: Dict[str, CalibratorData]
     psd_frequencies: jax.Array
@@ -99,6 +100,7 @@ class CalibrationData:
     metadata: Dict[str, Any] = field(default_factory=dict)
     temperatures: Optional[jax.Array] = None
     temperature_timestamps: Optional[jax.Array] = None
+    lna_s11: Optional[jax.Array] = None
 
     def __post_init__(self):
         """Validate data consistency."""
@@ -221,13 +223,29 @@ class HDF5DataLoader:
             # Load temperature data if available
             temperatures, temp_timestamps = self._extract_temperatures(h5file)
 
+            # Load LNA S11 - REQUIRED for proper calibration
+            lna_s11 = None
+            if 'observation_data/lna_s11' in h5file:
+                lna_s11_data = h5file['observation_data/lna_s11'][:]
+                # Extract complex S11 from [1, 3, n_freq] format
+                if lna_s11_data.shape[1] == 3:
+                    s11_real = lna_s11_data[0, 1, :]
+                    s11_imag = lna_s11_data[0, 2, :]
+                    lna_s11 = self._to_jax_array(s11_real + 1j * s11_imag)
+                else:
+                    raise ValueError(f"LNA S11 has unexpected shape: {lna_s11_data.shape}")
+            else:
+                raise ValueError("LNA S11 data not found in HDF5 file. "
+                               "This is required for accurate calibration.")
+
             return CalibrationData(
                 calibrators=calibrators,
                 psd_frequencies=psd_frequencies,
                 vna_frequencies=vna_frequencies,
                 metadata=metadata,
                 temperatures=temperatures,
-                temperature_timestamps=temp_timestamps
+                temperature_timestamps=temp_timestamps,
+                lna_s11=lna_s11
             )
 
     def _discover_calibrators(self, h5file: h5py.File) -> List[str]:
@@ -357,7 +375,9 @@ class HDF5DataLoader:
             mean_temp = float(np.mean(cal_temp))
 
             # Validate temperature is reasonable
-            if not (0 < mean_temp < 1000):
+            # Allow higher temperatures for antenna (sky temperature can be very high)
+            max_temp = 10000 if name == 'ant' else 1000
+            if not (0 < mean_temp < max_temp):
                 raise ValueError(f"Invalid temperature {mean_temp}K for calibrator '{name}'")
 
             return self._to_jax_array(mean_temp)
@@ -509,13 +529,19 @@ class HDF5DataLoader:
                 temperature=cal.temperature
             )
 
+        # Apply mask to LNA S11 if present
+        masked_lna_s11 = None
+        if data.lna_s11 is not None:
+            masked_lna_s11 = data.lna_s11[vna_mask]
+
         return CalibrationData(
             calibrators=masked_calibrators,
             psd_frequencies=masked_psd_freq,
             vna_frequencies=masked_vna_freq,
             metadata=data.metadata,
             temperatures=data.temperatures,
-            temperature_timestamps=data.temperature_timestamps
+            temperature_timestamps=data.temperature_timestamps,
+            lna_s11=masked_lna_s11
         )
 
     def save_results(self, filepath: str, result: CalibrationResult) -> None:

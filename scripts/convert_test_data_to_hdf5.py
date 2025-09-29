@@ -8,6 +8,7 @@ import h5py
 from pathlib import Path
 from skrf import Network
 import sys
+import json
 
 def load_psd_data(filepath):
     """Load PSD data from text file."""
@@ -75,7 +76,7 @@ def convert_to_hdf5(input_dir, output_file):
     input_dir = Path(input_dir)
     cal_dir = input_dir / "calibration"
 
-    # Get list of calibrators
+    # Get list of all calibrators
     calibrators = [d.name for d in cal_dir.iterdir() if d.is_dir()]
     print(f"Found {len(calibrators)} calibrators: {calibrators}")
 
@@ -88,7 +89,7 @@ def convert_to_hdf5(input_dir, output_file):
     # Note: test data has 12288 points, but REACH expects 16384
     # We'll pad the data to match
     n_freq_reach = 16384
-    psd_frequencies = np.linspace(0, 200e6, n_freq_reach)
+    # Note: We don't store frequencies directly - the data loader computes them
 
     # Create HDF5 file
     with h5py.File(output_file, 'w') as h5f:
@@ -97,12 +98,19 @@ def convert_to_hdf5(input_dir, output_file):
         obs_info = h5f.create_group('observation_info')
         obs_metadata = h5f.create_group('observation_metadata')
 
-        # Add frequency arrays
-        obs_data.create_dataset('psd_frequencies', data=psd_frequencies)
+        # Note: Frequency arrays are computed by the data loader, not stored in HDF5
+        # The loader uses metadata to compute frequencies
 
-        # Create VNA frequency array (S11 data has 12288 points)
-        vna_frequencies = np.linspace(50e6, 200e6, n_freq_psd)  # Same as original test data
-        obs_data.create_dataset('vna_frequencies', data=vna_frequencies)
+        # Load and store LNA S11 data (same format as REACH observation)
+        lna_file = input_dir / "lna.s1p"
+        if lna_file.exists():
+            print("Loading LNA S11 data...")
+            lna_s11_data = load_s11_data(lna_file)
+            obs_data.create_dataset('lna_s11', data=lna_s11_data)
+            # Also create timestamp for consistency
+            lna_timestamp = np.array([[0.0]])
+            obs_data.create_dataset('lna_s11_timestamp', data=lna_timestamp)
+            print(f"  Added LNA S11 data with shape {lna_s11_data.shape}")
 
         # Collect temperature data for metadata
         temperatures_list = []
@@ -199,11 +207,9 @@ def convert_to_hdf5(input_dir, output_file):
                         obs_data.create_dataset(f'{cal_name}_temperature', data=np.array([temp]))
                         print(f"    {cal_name}: {temp:.1f} K")
 
-        # Create temperature metadata matrix matching data.py sensor_mapping
-        # Sensor mapping from data.py:
-        # 0: ant, 1: c10r10/c10r250, 2: hot, 3: r100, 4: c2r27,
-        # 5: c2r36, 6: c2r69, 7: c2r91, 8: cold, 9: c10open, 10: c10short, 11: r25
-        n_sensors = 13  # Total number of sensors
+        # Create temperature metadata matrix matching REACH observation format
+        # The reach_observation.hdf5 has 9 sensors, we'll match that
+        n_sensors = 9  # Match REACH observation
         n_time_temps = 10  # Dummy time samples
 
         # Temperature matrix [n_time, n_sensors]
@@ -213,41 +219,35 @@ def convert_to_hdf5(input_dir, output_file):
         # Default all to room temp first
         temp_matrix[:, :] = 298.0 + np.random.randn(n_time_temps, n_sensors) * 0.1
 
-        # Set specific sensors based on our mapping and actual temperatures
-        if 'ant' in calibrator_temperatures:
-            val = calibrator_temperatures['ant']
-            if isinstance(val, np.ndarray):
-                val = np.mean(val)
-            # Skip antenna with 5000K placeholder - use ambient instead
-            if val > 1000:
-                val = 290.0
-            temp_matrix[:, 0] = val + np.random.randn(n_time_temps) * 0.1
-
-        if 'hot' in calibrator_temperatures:
-            val = calibrator_temperatures['hot']
-            if isinstance(val, np.ndarray):
-                val = np.mean(val)
-            temp_matrix[:, 2] = val + np.random.randn(n_time_temps) * 0.1
-
-        if 'cold' in calibrator_temperatures:
-            val = calibrator_temperatures['cold']
-            if isinstance(val, np.ndarray):
-                val = np.mean(val)
-            temp_matrix[:, 8] = val + np.random.randn(n_time_temps) * 0.1
-
-        # Set room temperature calibrators
-        room_temp_cals = {
-            'c10r10': 1, 'c10r250': 1, 'r100': 3, 'c2r27': 4,
-            'c2r36': 5, 'c2r69': 6, 'c2r91': 7, 'c10open': 9,
-            'c10short': 10, 'r25': 11
+        # Map calibrators to sensor indices (matching data.py sensor_mapping)
+        # Must match the exact mapping in src/data.py
+        sensor_mapping = {
+            'ant': 0,      # Antenna
+            'r25': 1,      # 25 ohm resistor (room temp)
+            'hot': 2,      # Hot load at ~372K
+            'r100': 3,     # 100 ohm resistor (room temp)
+            'c2r27': 4,    # 2m cable with 27 ohm
+            'c2r36': 5,    # 2m cable with 36 ohm
+            'c2r69': 6,    # 2m cable with 69 ohm
+            'c2r91': 7,    # 2m cable with 91 ohm
+            'cold': 8,     # Cold load at ~271K
+            # These map to existing sensors
+            'c10open': 1,  # Maps to sensor 1 (same as r25)
+            'c10short': 1, # Maps to sensor 1 (same as r25)
+            'c10r10': 1,   # Maps to sensor 1 (same as r25)
+            'c10r250': 1,  # Maps to sensor 1 (same as r25)
         }
 
-        for cal_name, sensor_idx in room_temp_cals.items():
-            if cal_name in calibrator_temperatures:
+        # Set temperature values based on actual calibrator temperatures
+        # Process unique sensors first
+        for cal_name in ['ant', 'hot', 'cold', 'r25', 'r100', 'c2r27', 'c2r36', 'c2r69', 'c2r91']:
+            if cal_name in calibrator_temperatures and cal_name in sensor_mapping:
                 val = calibrator_temperatures[cal_name]
                 if isinstance(val, np.ndarray):
                     val = np.mean(val)
-                temp_matrix[:, sensor_idx] = val + np.random.randn(n_time_temps) * 0.1
+                # For antenna, keep the actual 5000K value for proper residual calculation
+                sensor_idx = sensor_mapping[cal_name]
+                temp_matrix[:, sensor_idx] = val + np.random.randn(n_time_temps) * 0.01  # Small variation
 
         # Save temperature metadata
         obs_metadata.create_dataset('temperatures', data=temp_matrix.astype(np.float32))
@@ -261,10 +261,20 @@ def convert_to_hdf5(input_dir, output_file):
         obs_metadata.create_dataset('tpm_temperatures', data=tpm_temps.astype(np.float32))
         obs_metadata.create_dataset('tpm_temperature_timestamps', data=np.arange(n_time_temps + 1) * 60.0)
 
-        # Add some metadata attributes
+        # Add metadata attributes for frequency computation
         obs_info.attrs['observation_name'] = 'test_dataset'
         obs_info.attrs['instrument'] = 'REACH'
         obs_info.attrs['date'] = '2024-01-01'
+
+        # Add spectrometer configuration for frequency array computation
+        # Store as JSON string since HDF5 can't directly store nested dicts
+        config = {
+            'spectrometer': {
+                'sampling_rate': 400,  # MHz
+                'nof_frequency_channels': 16384
+            }
+        }
+        obs_info.attrs['instrument_config_file'] = json.dumps(config)
 
     print(f"\nSuccessfully created HDF5 file: {output_file}")
     print(f"File size: {Path(output_file).stat().st_size / 1024 / 1024:.2f} MB")
