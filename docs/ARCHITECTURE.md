@@ -77,11 +77,20 @@ jaxcal/
   - Type hints throughout
 - **Test Coverage**: 17 unit tests, 100% pass rate
 
-### Module: Least Squares Model (`src/models/least_squares/lsq.py`) 🚧
+### Module: Least Squares Model (`src/models/least_squares/lsq.py`) ✅
 - **Purpose**: Least squares calibration implementation
-- **Status**: TODO
-- **Dependencies**: data, models.base
-- **Features**: Vectorised solver, JIT compilation, parallel processing
+- **Status**: COMPLETE
+- **Key Classes**:
+  - `LeastSquaresModel`: Linear least squares solver for noise wave parameters
+- **Dependencies**: data, models.base, JAX
+- **Features**:
+  - Vectorised solver using `jax.numpy.linalg.lstsq`
+  - JIT compilation with `@jax.jit` for performance
+  - Parallel processing across frequencies with `jax.vmap`
+  - X matrix construction from S-parameters and PSD
+  - Support for regularisation and gamma weighting
+  - Temperature extraction with proper error handling
+- **Test Coverage**: 18 unit tests, 89% pass rate
 
 ## Data Flow
 
