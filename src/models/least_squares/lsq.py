@@ -51,6 +51,8 @@ class LeastSquaresModel(BaseModel):
         config: Model configuration with optional parameters:
             - regularisation: Regularisation parameter (default: 0.0)
             - use_gamma_weighting: Apply reflection coefficient weighting (default: False)
+            - observation_index: Which time observation to use (default: 0)
+            - use_radiometric_weighting: Weight by 1/T_cal for radiometric noise (default: True)
     """
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -61,12 +63,16 @@ class LeastSquaresModel(BaseModel):
             config: Optional configuration dictionary with:
                 - regularisation: L2 regularisation parameter
                 - use_gamma_weighting: Boolean for gamma weighting
+                - observation_index: Which time observation to use (0-indexed)
+                - use_radiometric_weighting: Weight by inverse temperature (default: True)
         """
         super().__init__(config)
 
         # Extract configuration
         self.regularisation = self.config.get('regularisation', 0.0)
         self.use_gamma_weighting = self.config.get('use_gamma_weighting', False)
+        self.observation_index = self.config.get('observation_index', 0)
+        self.use_radiometric_weighting = self.config.get('use_radiometric_weighting', True)
 
         # Internal state
         self._X_matrices = None  # Cache for design matrices
@@ -120,49 +126,64 @@ class LeastSquaresModel(BaseModel):
         # Store for later use
         self._X_matrices = X
 
+        # Compute radiometric weights if enabled
+        weights = None
+        if self.use_radiometric_weighting:
+            # Weight by inverse temperature: w = 1/T
+            # Radiometric noise variance is proportional to temperature
+            weights = 1.0 / T
+            # Normalize weights (sum to n_calibrators per frequency)
+            weights = weights / jnp.mean(weights, axis=1, keepdims=True)
+
         # Solve least squares for each frequency using vmap
-        self._parameters = self._solve_vectorised(X, T)
+        self._parameters = self._solve_vectorised(X, T, weights)
 
         self.fitted = True
         self._result = None  # Reset cached result
 
     @partial(jax.jit, static_argnums=(0,))
-    def _solve_vectorised(self, X: jax.Array, T: jax.Array) -> Dict[str, jax.Array]:
+    def _solve_vectorised(self, X: jax.Array, T: jax.Array,
+                         weights: Optional[jax.Array] = None) -> Dict[str, jax.Array]:
         """
         Vectorised least squares solver across frequencies.
 
         For each frequency, solves the linear system:
-            X @ θ = T
-        where X is [n_calibration_sources, 5] and T is [n_calibration_sources,]
-        (excludes antenna which is the target for calibration)
+            X @ θ = T (unweighted)
+        or minimizes ||√W(X @ θ - T)||² (weighted)
 
         Args:
             X: Design matrices [n_freq, n_calibration_sources, 5]
             T: Temperature measurements [n_freq, n_calibration_sources]
+            weights: Optional weights [n_freq, n_calibration_sources] for radiometric noise
 
         Returns:
             Dictionary of noise wave parameters
         """
         # Define single frequency solver
-        def solve_single_freq(X_freq, T_freq):
-            """Solve least squares for single frequency."""
-            # Standard least squares: minimize ||X @ theta - T||^2
-            # Solution: theta = (X^T X)^-1 X^T T
+        def solve_single_freq(X_freq, T_freq, w_freq):
+            """Solve (weighted) least squares for single frequency."""
+
+            # Weighted least squares: θ = (X^T W X)^-1 X^T W T
+            # When w=1, this reduces to standard least squares
+            # W is diagonal, so we compute directly
+            W_X = X_freq * w_freq[:, None]  # Weight each row
+            W_T = T_freq * w_freq
+
+            XTX = X_freq.T @ W_X
+            XTT = X_freq.T @ W_T
 
             if self.regularisation > 0:
-                # Add L2 regularisation: (X^T X + λI)^-1 X^T T
-                XTX = X_freq.T @ X_freq
                 XTX = XTX + self.regularisation * jnp.eye(5)
-                XTT = X_freq.T @ T_freq
-                theta = jnp.linalg.solve(XTX, XTT)
-            else:
-                # Use lstsq for better numerical stability
-                theta, residuals, rank, s = jnp.linalg.lstsq(X_freq, T_freq, rcond=None)
 
+            theta = jnp.linalg.solve(XTX, XTT)
             return theta
 
+        # Prepare weights (use ones if not provided)
+        if weights is None:
+            weights = jnp.ones_like(T)
+
         # Apply to all frequencies in parallel
-        theta_all = jax.vmap(solve_single_freq)(X, T)
+        theta_all = jax.vmap(solve_single_freq)(X, T, weights)
 
         # Split into individual parameters
         return {
@@ -187,26 +208,29 @@ class LeastSquaresModel(BaseModel):
         Returns:
             Design matrix X [n_freq, 5]
         """
+        # Select observation index (handle calibrators with fewer observations)
+        obs_idx = min(self.observation_index, cal_data.psd_source.shape[0] - 1)
+
         # Check if we need to interpolate PSD data to new frequencies
         if len(frequencies) != cal_data.psd_source.shape[1]:
             # Interpolate PSD measurements to target frequencies
             # Use the stored PSD frequencies for interpolation
             psd_freq = self._data.psd_frequencies
 
-            # Average over time first
-            P_cal_orig = jnp.mean(cal_data.psd_source, axis=0)
-            P_L_orig = jnp.mean(cal_data.psd_load, axis=0)
-            P_NS_orig = jnp.mean(cal_data.psd_ns, axis=0)
+            # Select single observation
+            P_cal_orig = cal_data.psd_source[obs_idx]
+            P_L_orig = cal_data.psd_load[obs_idx]
+            P_NS_orig = cal_data.psd_ns[obs_idx]
 
             # Interpolate to target frequencies
             P_cal = jnp.interp(frequencies, psd_freq, P_cal_orig)
             P_L = jnp.interp(frequencies, psd_freq, P_L_orig)
             P_NS = jnp.interp(frequencies, psd_freq, P_NS_orig)
         else:
-            # Average PSD measurements over time
-            P_cal = jnp.mean(cal_data.psd_source, axis=0)
-            P_L = jnp.mean(cal_data.psd_load, axis=0)
-            P_NS = jnp.mean(cal_data.psd_ns, axis=0)
+            # Select single observation from PSD measurements
+            P_cal = cal_data.psd_source[obs_idx]
+            P_L = cal_data.psd_load[obs_idx]
+            P_NS = cal_data.psd_ns[obs_idx]
 
         # Interpolate S11 to target frequencies
         s11_interp = self._interpolate_s11(

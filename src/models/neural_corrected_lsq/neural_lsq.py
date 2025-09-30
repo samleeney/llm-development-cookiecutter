@@ -89,6 +89,8 @@ class NeuralCorrectedLSQModel(BaseModel):
         config: Model configuration with parameters:
             - regularisation: L2 regularisation for least squares (default: 0.0)
             - use_gamma_weighting: Gamma weighting for least squares (default: False)
+            - observation_index: Which time observation to use (default: 0)
+            - use_radiometric_weighting: Weight by 1/T_cal for radiometric noise (default: True)
             - use_gamma_weighting_nn: Apply gamma weighting to neural network training
               (default: same as use_gamma_weighting). When enabled, the network learns
               corrections in weighted space: r_w = r × (1 - |Γ|²), improving stability
@@ -111,6 +113,8 @@ class NeuralCorrectedLSQModel(BaseModel):
         # Least squares configuration
         self.regularisation = self.config.get('regularisation', 0.0)
         self.use_gamma_weighting = self.config.get('use_gamma_weighting', False)
+        self.observation_index = self.config.get('observation_index', 0)
+        self.use_radiometric_weighting = self.config.get('use_radiometric_weighting', True)
 
         # Neural network configuration
         self.hidden_layers = tuple(self.config.get('hidden_layers', [32, 32]))
@@ -266,10 +270,11 @@ class NeuralCorrectedLSQModel(BaseModel):
         Returns:
             Tuple of (trained_params, network_module)
         """
-        # Helper function to prepare inputs/targets from data
+        # Helper function to prepare inputs/targets/weights from data
         def prepare_data(cal_data_dict, frequencies):
             inputs_list = []
             targets_list = []
+            weights_list = []
 
             for cal_name, cal_data in cal_data_dict.items():
                 if cal_name == 'ant':
@@ -310,16 +315,29 @@ class NeuralCorrectedLSQModel(BaseModel):
                     jnp.angle(s11_interp)   # Phase of S11
                 ], axis=1)
 
+                # Compute radiometric weights if enabled
+                if self.use_radiometric_weighting:
+                    # Weight by inverse temperature (radiometric noise variance ∝ T)
+                    sample_weights = 1.0 / T_true
+                else:
+                    sample_weights = jnp.ones_like(T_true)
+
                 inputs_list.append(features)
                 targets_list.append(residuals)
+                weights_list.append(sample_weights)
 
             # Stack all calibrators
             inputs = jnp.concatenate(inputs_list, axis=0)
             targets = jnp.concatenate(targets_list, axis=0)
-            return inputs, targets
+            weights = jnp.concatenate(weights_list, axis=0)
+
+            # Normalize weights to sum to n_samples
+            weights = weights * (len(weights) / jnp.sum(weights))
+
+            return inputs, targets, weights
 
         # Prepare training data
-        train_inputs, train_targets = prepare_data(data.calibrators, data.psd_frequencies)
+        train_inputs, train_targets, train_weights = prepare_data(data.calibrators, data.psd_frequencies)
 
         # Normalise frequency dimension for better training
         self._freq_mean = jnp.mean(train_inputs[:, 0])
@@ -327,9 +345,9 @@ class NeuralCorrectedLSQModel(BaseModel):
         train_inputs = train_inputs.at[:, 0].set((train_inputs[:, 0] - self._freq_mean) / (self._freq_std + 1e-10))
 
         # Prepare validation data if provided
-        val_inputs, val_targets = None, None
+        val_inputs, val_targets, val_weights = None, None, None
         if validation_data is not None:
-            val_inputs, val_targets = prepare_data(validation_data.calibrators, validation_data.psd_frequencies)
+            val_inputs, val_targets, val_weights = prepare_data(validation_data.calibrators, validation_data.psd_frequencies)
             # Apply same normalisation as training data
             val_inputs = val_inputs.at[:, 0].set((val_inputs[:, 0] - self._freq_mean) / (self._freq_std + 1e-10))
 
@@ -344,11 +362,11 @@ class NeuralCorrectedLSQModel(BaseModel):
 
         # Define training loss function (with regularization, dropout enabled)
         @jax.jit
-        def train_loss_fn(params, inputs, targets, rng):
+        def train_loss_fn(params, inputs, targets, weights, rng):
             predictions = network.apply(params, inputs, deterministic=False, rngs={'dropout': rng})
 
-            # MSE loss on residuals
-            mse_loss = jnp.mean((predictions - targets)**2)
+            # Weighted MSE loss on residuals
+            mse_loss = jnp.mean(weights * (predictions - targets)**2)
 
             # Regularisation: penalise large corrections
             reg_loss = self.correction_regularization * jnp.mean(predictions**2)
@@ -357,18 +375,18 @@ class NeuralCorrectedLSQModel(BaseModel):
 
         # Define validation loss function (without regularization, dropout disabled)
         @jax.jit
-        def val_loss_fn(params, inputs, targets):
+        def val_loss_fn(params, inputs, targets, weights):
             predictions = network.apply(params, inputs, deterministic=True)
 
-            # MSE loss only
-            mse_loss = jnp.mean((predictions - targets)**2)
+            # Weighted MSE loss only
+            mse_loss = jnp.mean(weights * (predictions - targets)**2)
 
             return mse_loss, {'mse': mse_loss, 'reg': 0.0}
 
         # Training step
         @jax.jit
-        def train_step(params, opt_state, inputs, targets, rng):
-            (loss_val, metrics), grads = jax.value_and_grad(train_loss_fn, has_aux=True)(params, inputs, targets, rng)
+        def train_step(params, opt_state, inputs, targets, weights, rng):
+            (loss_val, metrics), grads = jax.value_and_grad(train_loss_fn, has_aux=True)(params, inputs, targets, weights, rng)
             updates, opt_state = optimizer.update(grads, opt_state)
             params = optax.apply_updates(params, updates)
             return params, opt_state, loss_val, metrics
@@ -382,7 +400,7 @@ class NeuralCorrectedLSQModel(BaseModel):
         dropout_rng = jax.random.PRNGKey(1)  # Separate RNG for dropout
         for i in range(self.n_iterations):
             dropout_rng, step_rng = jax.random.split(dropout_rng)
-            params, opt_state, loss_val, metrics = train_step(params, opt_state, train_inputs, train_targets, step_rng)
+            params, opt_state, loss_val, metrics = train_step(params, opt_state, train_inputs, train_targets, train_weights, step_rng)
 
             # Validation check
             check_validation = (validation_data is not None and
@@ -393,7 +411,7 @@ class NeuralCorrectedLSQModel(BaseModel):
                 log_str = f"  Iteration {i}/{self.n_iterations}: train_rmse={train_rmse:.6f}"
 
                 if check_validation:
-                    val_loss, val_metrics = val_loss_fn(params, val_inputs, val_targets)
+                    val_loss, val_metrics = val_loss_fn(params, val_inputs, val_targets, val_weights)
                     val_rmse = jnp.sqrt(val_metrics['mse'])
                     log_str += f", val_rmse={val_rmse:.6f}"
 
@@ -434,20 +452,23 @@ class NeuralCorrectedLSQModel(BaseModel):
         Returns:
             Design matrix X [n_freq, 5]
         """
+        # Select observation index (handle calibrators with fewer observations)
+        obs_idx = min(self.observation_index, cal_data.psd_source.shape[0] - 1)
+
         # Check if we need to interpolate PSD data
         if len(frequencies) != cal_data.psd_source.shape[1]:
             psd_freq = self._data.psd_frequencies
-            P_cal_orig = jnp.mean(cal_data.psd_source, axis=0)
-            P_L_orig = jnp.mean(cal_data.psd_load, axis=0)
-            P_NS_orig = jnp.mean(cal_data.psd_ns, axis=0)
+            P_cal_orig = cal_data.psd_source[obs_idx]
+            P_L_orig = cal_data.psd_load[obs_idx]
+            P_NS_orig = cal_data.psd_ns[obs_idx]
 
             P_cal = jnp.interp(frequencies, psd_freq, P_cal_orig)
             P_L = jnp.interp(frequencies, psd_freq, P_L_orig)
             P_NS = jnp.interp(frequencies, psd_freq, P_NS_orig)
         else:
-            P_cal = jnp.mean(cal_data.psd_source, axis=0)
-            P_L = jnp.mean(cal_data.psd_load, axis=0)
-            P_NS = jnp.mean(cal_data.psd_ns, axis=0)
+            P_cal = cal_data.psd_source[obs_idx]
+            P_L = cal_data.psd_load[obs_idx]
+            P_NS = cal_data.psd_ns[obs_idx]
 
         # Interpolate S11 to target frequencies
         s11_interp = self._interpolate_s11(

@@ -94,7 +94,7 @@ def main():
         metadata=masked_data.metadata
     )
 
-    lsq_model = LeastSquaresModel({'regularisation': 0.0})
+    lsq_model = LeastSquaresModel({'regularisation': 0.0, 'observation_index': 7})
     lsq_model.fit(training_data)
     lsq_result = lsq_model.get_result()
 
@@ -134,15 +134,16 @@ def main():
     print("=" * 70)
 
     neural_config = {
-        'regularisation': 0.0,
-        'use_gamma_weighting': True,
-        'hidden_layers': [32, 32, 32],
-        'learning_rate': 1e-3,
-        'n_iterations': 10000,
+        'regularisation': 0.01,
+        'use_gamma_weighting': False,
+        'observation_index': 7,
+        'hidden_layers': [128, 128, 128],
+        'learning_rate': 5e-4,
+        'n_iterations': 100000,
         'correction_regularization': 0.01,  # Regularization on corrections
         'dropout_rate': 0.4,  # Dropout rate for regularization
         'validation_check_interval': 50,
-        'early_stopping_patience': 20,  # 20 checks * 50 iterations = 1k epochs
+        'early_stopping_patience': 200,  # 200 checks * 50 iterations = 10k epochs (10%)
         'min_delta': 1e-4
     }
 
