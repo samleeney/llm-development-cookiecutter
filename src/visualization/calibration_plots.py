@@ -104,15 +104,9 @@ class CalibrationPlotter:
                 # Calculate RMSE
                 rmse = float(jnp.sqrt(jnp.mean(residuals**2)))
 
-                # Plot scatter points
-                ax.scatter(freq_mhz, T_pred, s=0.5, alpha=0.5,
-                          color='C0', label=f'Predicted')
-
-                # Add smoothed line
-                if len(T_pred) > bin_size:
-                    smoothed = jnp.convolve(T_pred, jnp.ones(bin_size)/bin_size, mode='valid')
-                    smooth_freq = jnp.convolve(freq_mhz, jnp.ones(bin_size)/bin_size, mode='valid')
-                    ax.plot(smooth_freq, smoothed, 'k-', linewidth=1, alpha=0.8)
+                # Plot line
+                ax.plot(freq_mhz, T_pred, '-', linewidth=1, alpha=0.7,
+                       color='C0', label=f'Predicted')
 
                 # Add target temperature line if not antenna
                 if cal_name != 'ant' or antenna_validation:
@@ -223,15 +217,9 @@ class CalibrationPlotter:
             std_corr = float(jnp.std(corrections))
             rms_corr = float(jnp.sqrt(jnp.mean(corrections**2)))
 
-            # Plot scatter points
-            ax.scatter(freq_mhz, corrections, s=0.5, alpha=0.5,
-                      color='C1', label='Correction')
-
-            # Add smoothed line
-            if len(corrections) > bin_size:
-                smoothed = jnp.convolve(corrections, jnp.ones(bin_size)/bin_size, mode='valid')
-                smooth_freq = jnp.convolve(freq_mhz, jnp.ones(bin_size)/bin_size, mode='valid')
-                ax.plot(smooth_freq, smoothed, 'k-', linewidth=1.5, alpha=0.8)
+            # Plot line
+            ax.plot(freq_mhz, corrections, '-', linewidth=1, alpha=0.7,
+                   color='C1', label='Correction')
 
             # Add zero line for reference
             ax.axhline(y=0, color='gray', linestyle='--', linewidth=0.8, alpha=0.7)
@@ -545,15 +533,7 @@ class CalibrationPlotter:
         T_pred = result.predicted_temperatures['ant']
 
         # Top panel: Temperature prediction
-        ax1.scatter(freq_mhz, T_pred, s=0.5, alpha=0.3, color='C0')
-
-        # Add smoothed line
-        bin_size = 100
-        if len(T_pred) > bin_size:
-            smoothed = jnp.convolve(T_pred, jnp.ones(bin_size)/bin_size, mode='valid')
-            smooth_freq = jnp.convolve(freq_mhz, jnp.ones(bin_size)/bin_size, mode='valid')
-            ax1.plot(smooth_freq, smoothed, 'k-', linewidth=1.5,
-                    label='Smoothed (100 pt)')
+        ax1.plot(freq_mhz, T_pred, '-', linewidth=1, alpha=0.7, color='C0')
 
         ax1.set_ylabel('Temperature (K)')
         ax1.set_title('Antenna Temperature Prediction')
@@ -567,7 +547,7 @@ class CalibrationPlotter:
         if 'ant' in result.residuals:
             residuals = result.residuals['ant']
 
-            ax2.scatter(freq_mhz, residuals, s=0.5, alpha=0.3, color='C1')
+            ax2.plot(freq_mhz, residuals, '-', linewidth=1, alpha=0.7, color='C1')
             ax2.axhline(y=0, color='k', linestyle='-', linewidth=0.5)
 
             # Add RMS line

@@ -89,6 +89,10 @@ class NeuralCorrectedLSQModel(BaseModel):
         config: Model configuration with parameters:
             - regularisation: L2 regularisation for least squares (default: 0.0)
             - use_gamma_weighting: Gamma weighting for least squares (default: False)
+            - use_gamma_weighting_nn: Apply gamma weighting to neural network training
+              (default: same as use_gamma_weighting). When enabled, the network learns
+              corrections in weighted space: r_w = r × (1 - |Γ|²), improving stability
+              and consistency with the least squares formulation.
             - hidden_layers: Neural network architecture (default: (32, 32))
             - learning_rate: Adam learning rate (default: 1e-3)
             - n_iterations: Training iterations (default: 1000)
@@ -114,6 +118,8 @@ class NeuralCorrectedLSQModel(BaseModel):
         self.n_iterations = self.config.get('n_iterations', 1000)
         self.correction_regularization = self.config.get('correction_regularization', 0.01)
         self.dropout_rate = self.config.get('dropout_rate', 0.0)
+        # By default, use gamma weighting for NN if least squares uses it
+        self.use_gamma_weighting_nn = self.config.get('use_gamma_weighting_nn', self.use_gamma_weighting)
 
         # Validation and early stopping configuration
         self.validation_check_interval = self.config.get('validation_check_interval', 50)
@@ -292,6 +298,11 @@ class NeuralCorrectedLSQModel(BaseModel):
                     cal_data.s11_complex,
                     frequencies
                 )
+
+                # Apply gamma weighting to residuals if enabled
+                if self.use_gamma_weighting_nn:
+                    gamma_weight = 1 - jnp.abs(s11_interp)**2
+                    residuals = residuals * gamma_weight
 
                 features = jnp.stack([
                     frequencies,
@@ -532,6 +543,10 @@ class NeuralCorrectedLSQModel(BaseModel):
         Combines linear prediction from least squares with neural network correction:
             T = X @ θ + A(freq, Γ_cal)
 
+        If gamma weighting is enabled for the neural network (use_gamma_weighting_nn),
+        the correction is learned in weighted space and automatically unweighted:
+            T = X @ θ + A_w(freq, Γ_cal) / (1 - |Γ|²)
+
         Args:
             frequencies: Frequency points for prediction
             calibrator: Name of calibrator
@@ -588,6 +603,12 @@ class NeuralCorrectedLSQModel(BaseModel):
         ], axis=1)
 
         A_correction = self._nn_state.apply(self._nn_params, features, deterministic=True)
+
+        # If gamma weighting was used for NN training, unweight the correction
+        if self.use_gamma_weighting_nn:
+            gamma_weight = 1 - jnp.abs(s11_interp)**2
+            # Add small epsilon for numerical stability
+            A_correction = A_correction / (gamma_weight + 1e-10)
 
         # Combined prediction
         return T_linear + A_correction
@@ -663,10 +684,12 @@ class NeuralCorrectedLSQModel(BaseModel):
         return {
             'regularisation': self.regularisation,
             'use_gamma_weighting': self.use_gamma_weighting,
+            'use_gamma_weighting_nn': self.use_gamma_weighting_nn,
             'hidden_layers': list(self.hidden_layers),
             'learning_rate': self.learning_rate,
             'n_iterations': self.n_iterations,
-            'correction_regularization': self.correction_regularization
+            'correction_regularization': self.correction_regularization,
+            'dropout_rate': self.dropout_rate
         }
 
     def __repr__(self) -> str:

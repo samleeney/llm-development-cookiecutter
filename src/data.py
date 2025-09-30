@@ -544,6 +544,101 @@ class HDF5DataLoader:
             lna_s11=masked_lna_s11
         )
 
+    def bin_frequencies(
+        self, data: CalibrationData, bin_width_hz: float = 1e6
+    ) -> CalibrationData:
+        """
+        Bin frequency data to reduce resolution.
+
+        Args:
+            data: CalibrationData object
+            bin_width_hz: Bin width in Hz (default: 1 MHz)
+
+        Returns:
+            New CalibrationData with binned frequencies
+        """
+        def bin_array(frequencies, values, bin_width):
+            """Bin data by averaging within frequency bins."""
+            freq_min = float(jnp.min(frequencies))
+            freq_max = float(jnp.max(frequencies))
+            n_bins = int(jnp.ceil((freq_max - freq_min) / bin_width))
+
+            binned_freq = []
+            binned_values = []
+
+            for i in range(n_bins):
+                bin_start = freq_min + i * bin_width
+                bin_end = bin_start + bin_width
+                mask = (frequencies >= bin_start) & (frequencies < bin_end)
+
+                if jnp.any(mask):
+                    binned_freq.append(jnp.mean(frequencies[mask]))
+                    if values.ndim == 1:
+                        binned_values.append(jnp.mean(values[mask]))
+                    elif values.ndim == 2:
+                        # Average across frequency dimension (axis=1)
+                        binned_values.append(jnp.mean(values[:, mask], axis=1))
+
+            binned_freq = jnp.array(binned_freq)
+            if len(binned_values) > 0 and binned_values[0].ndim == 0:
+                binned_values = jnp.array(binned_values)
+            elif len(binned_values) > 0:
+                binned_values = jnp.stack(binned_values, axis=1)
+
+            return binned_freq, binned_values
+
+        # Bin PSD frequencies
+        psd_freq_binned = None
+        binned_calibrators = {}
+
+        for name, cal in data.calibrators.items():
+            # Bin PSD data
+            psd_freq_binned, psd_source_binned = bin_array(
+                data.psd_frequencies, cal.psd_source, bin_width_hz
+            )
+            _, psd_load_binned = bin_array(
+                data.psd_frequencies, cal.psd_load, bin_width_hz
+            )
+            _, psd_ns_binned = bin_array(
+                data.psd_frequencies, cal.psd_ns, bin_width_hz
+            )
+
+            # Bin VNA S11 data
+            s11_freq_binned, s11_complex_binned = bin_array(
+                cal.s11_freq, cal.s11_complex, bin_width_hz
+            )
+
+            binned_calibrators[name] = CalibratorData(
+                name=name,
+                psd_source=psd_source_binned,
+                psd_load=psd_load_binned,
+                psd_ns=psd_ns_binned,
+                s11_freq=s11_freq_binned,
+                s11_complex=s11_complex_binned,
+                timestamps=cal.timestamps,
+                temperature=cal.temperature
+            )
+
+        # Bin VNA frequencies (use first calibrator as reference)
+        vna_freq_binned = binned_calibrators[list(binned_calibrators.keys())[0]].s11_freq
+
+        # Bin LNA S11 if present
+        binned_lna_s11 = None
+        if data.lna_s11 is not None:
+            _, binned_lna_s11 = bin_array(
+                data.vna_frequencies, data.lna_s11, bin_width_hz
+            )
+
+        return CalibrationData(
+            calibrators=binned_calibrators,
+            psd_frequencies=psd_freq_binned,
+            vna_frequencies=vna_freq_binned,
+            metadata=data.metadata,
+            temperatures=data.temperatures,
+            temperature_timestamps=data.temperature_timestamps,
+            lna_s11=binned_lna_s11
+        )
+
     def save_results(self, filepath: str, result: CalibrationResult) -> None:
         """
         Save calibration results to HDF5 file.

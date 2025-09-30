@@ -40,6 +40,12 @@ def main():
     mask = (data.vna_frequencies >= 50e6) & (data.vna_frequencies <= 130e6)
     masked_data_full = loader.apply_frequency_mask(data, mask)
 
+    # Optional: Bin frequencies to 1 MHz resolution
+    bin_frequencies = False  # Set to False to disable binning
+    if bin_frequencies:
+        print("Binning frequencies to 1 MHz resolution...")
+        masked_data_full = loader.bin_frequencies(masked_data_full, bin_width_hz=1e6)
+
     # Filter data: use c2r91 as validation (exclude from training, like antenna)
     # Remove ant entirely for now
     from src.data import CalibrationData
@@ -129,13 +135,14 @@ def main():
 
     neural_config = {
         'regularisation': 0.0,
-        'hidden_layers': [128, 128, 128],
+        'use_gamma_weighting': True,
+        'hidden_layers': [32, 32, 32],
         'learning_rate': 1e-3,
-        'n_iterations': 3000,
+        'n_iterations': 10000,
         'correction_regularization': 0.01,  # Regularization on corrections
-        'dropout_rate': 0.2,  # Dropout rate for regularization
+        'dropout_rate': 0.4,  # Dropout rate for regularization
         'validation_check_interval': 50,
-        'early_stopping_patience': 100,
+        'early_stopping_patience': 20,  # 20 checks * 50 iterations = 1k epochs
         'min_delta': 1e-4
     }
 
@@ -153,7 +160,7 @@ def main():
 
     print("\nFitting neural-corrected least squares model...")
     neural_model = NeuralCorrectedLSQModel(neural_config)
-    neural_model.fit(training_data)  # No validation_data = no early stopping
+    neural_model.fit(training_data, validation_data=validation_data)
     neural_result = neural_model.get_result()
 
     # Add c2r91 validation predictions
